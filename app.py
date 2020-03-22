@@ -10,7 +10,7 @@ import io
 import requests
 
 
-url='https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_daily_reports/03-20-2020.csv'
+url='https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_daily_reports/03-21-2020.csv'
 s=requests.get(url).content
 df=pd.read_csv(io.StringIO(s.decode('utf-8')))
 
@@ -27,8 +27,6 @@ def get_hovertext(row):
 
 df['hovertext'] = df.apply(lambda row: get_hovertext(row), axis=1)
 
-
-
 external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
 mapbox_access_token = os.environ.get('MAPBOX_TOKEN')
 app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
@@ -40,7 +38,12 @@ def get_mapbox():
         lat=df['Latitude'],
         lon=df['Longitude'],
         mode='markers',
-        marker_size=df['Confirmed'],
+        marker=go.scattermapbox.Marker(
+            size=df['Confirmed'],
+            sizeref=2.*df['Confirmed'].values.max()/(100**2),
+            sizemode='area',
+            color='rgb(180,0,0)',
+        ),
         text=df['hovertext']
     )]
     layout = dict(
@@ -53,7 +56,7 @@ def get_mapbox():
             ),
         ),
         mapbox=dict(
-            mapbox_style='dark',
+            style='dark',
             accesstoken=mapbox_access_token,
             bearing=0,
             center=dict(
