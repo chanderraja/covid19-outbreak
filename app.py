@@ -9,33 +9,35 @@ import pandas as pd
 import io
 import requests
 
-COL_PROVINCE_STATE='Province/State'
-COL_STATE='State'
-COL_COUNTRY_REGION='Country/Region'
-COL_COUNTRY='Country'
-COL_LATITUDE='Latitude'
-COL_LONGITUDE='Longitude'
+COL_PROVINCE_STATE='Province_State'
+COL_COUNTRY_REGION='Country_Region'
+COL_ADMIN2='Admin2'
+COL_LATITUDE='Lat'
+COL_LONGITUDE='Long_'
+COL_CONFIRMED='Confirmed'
+COL_DEATHS='Deaths'
+COL_RECOVERED='Recovered'
+COL_ACTIVE='Active'
+COL_LOC_COMBINED='Combined_Key'
+COL_HOVERTEXT='Hovertext'
 
 
-url='https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_daily_reports/03-21-2020.csv'
+url='https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_daily_reports/03-25-2020.csv'
 s=requests.get(url).content
 df=pd.read_csv(io.StringIO(s.decode('utf-8')))
-# clean up column names
-df =  df.rename(columns={COL_PROVINCE_STATE: COL_STATE, COL_COUNTRY_REGION: COL_COUNTRY})
 
 
 def get_location(row):
-    state = row[COL_STATE]
-    country = row[COL_COUNTRY]
-    if pd.isna(state):
-        return country
-    return state + '<br>' + country
+    return row[COL_LOC_COMBINED]
 
 def get_hovertext(row):
-    return get_location(row) + '<br>' + 'Confirmed = ' + str(row['Confirmed']) + \
-           '<br>' + 'Deaths = ' + str(row['Deaths']) + '<br>' + 'Recovered =' + str(row['Recovered'])
+    return get_location(row) + '<br>' + \
+           'Confirmed = ' + str(row[COL_CONFIRMED]) + '<br>' + \
+           'Deaths = ' + str(row[COL_DEATHS]) + '<br>' + \
+           'Recovered =' + str(row[COL_RECOVERED]) + '<br>' + \
+           'Active =' + str(row[COL_ACTIVE])
 
-df['hovertext'] = df.apply(lambda row: get_hovertext(row), axis=1)
+df[COL_HOVERTEXT] = df.apply(lambda row: get_hovertext(row), axis=1)
 
 
 
@@ -45,8 +47,9 @@ app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
 server = app.server
 
 def get_location_suggestions():
-    suggestions = df[COL_COUNTRY].unique().tolist()
-    suggestions += df[COL_STATE].fillna('').unique().tolist()
+    suggestions = df[COL_COUNTRY_REGION].unique().tolist()
+    suggestions += df[COL_PROVINCE_STATE].fillna('').unique().tolist()
+    suggestions += df[COL_ADMIN2].fillna('').unique().tolist()
     suggestions = sorted(suggestions)
     return suggestions
 
@@ -59,10 +62,11 @@ DEFAULT_ZOOM=2
 
 def get_latlong_and_zoom(location):
     if location is not None and location is not '':
-        rows = df[df.Country == location]
+        rows = df[df[COL_COUNTRY_REGION] == location]
         if rows.shape[0] == 0:
-            rows = df[df.State == location]
-
+            rows = df[df[COL_PROVINCE_STATE] == location]
+        if rows.shape[0] == 0:
+            rows = df[df[COL_ADMIN2] == location]
         if rows.shape[0] != 0:
             row = rows.iloc[0]
             return row[COL_LATITUDE], row[COL_LONGITUDE], 4
@@ -72,16 +76,16 @@ def get_latlong_and_zoom(location):
 def get_mapbox(center_latitude, center_longitude, zoom):
     datamap =  dict(
         type='scattermapbox',
-        lat=df['Latitude'],
-        lon=df['Longitude'],
+        lat=df[COL_LATITUDE],
+        lon=df[COL_LONGITUDE],
         mode='markers',
         marker=go.scattermapbox.Marker(
-            size=df['Confirmed'],
-            sizeref=2.*df['Confirmed'].values.max()/(100**2),
+            size=df[COL_CONFIRMED],
+            sizeref=2.*df[COL_CONFIRMED].values.max()/(100**2),
             sizemode='area',
             color='rgb(180,0,0)',
         ),
-        text=df['hovertext']
+        text=df[COL_HOVERTEXT]
     )
     layout = dict(
         autosize=True,
@@ -92,7 +96,7 @@ def get_mapbox(center_latitude, center_longitude, zoom):
             ),
         ),
         mapbox=dict(
-            style='light',
+            style='dark',
             accesstoken=mapbox_access_token,
             bearing=0,
             center=dict(
@@ -136,19 +140,10 @@ def serve_layout():
                       list='id-list-suggested-inputs',
                       value=''
                       ),
-            dcc.Loading(
-                id='id-loading',
-                children=[
-                    html.Div(
-                        dcc.Graph(
-                            id='id-mapbox',
-                            figure={}
-                        ),
-                        id='id-map-container'
-                    ),
-                ],
-                type='circle'
-            ),
+            dcc.Graph(
+                id='id-mapbox',
+                figure={}
+            )
         ]
     )
 
