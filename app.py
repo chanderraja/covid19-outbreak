@@ -28,8 +28,7 @@ COL_HOVERTEXT='Hovertext'
 
 url='https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/'+\
     'csse_covid_19_data/csse_covid_19_daily_reports/03-25-2020.csv'
-s=requests.get(url).content
-df=pd.read_csv(io.StringIO(s.decode('utf-8')))
+df=pd.read_csv(url, dtype={COL_FIPS: str})
 
 with urlopen('https://raw.githubusercontent.com/plotly/datasets/master/geojson-counties-fips.json') as response:
     counties = json.load(response)
@@ -48,7 +47,6 @@ df[COL_HOVERTEXT] = df.apply(lambda row: get_hovertext(row), axis=1)
 
 df_usa = df[df[COL_COUNTRY_REGION]=='US']
 df_usa = df[df[COL_FIPS].notna()] # drop rows with NaN in FIPS column
-df_usa[COL_CONFIRMED] = df_usa[COL_CONFIRMED].replace(0, .000001)
 
 external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
 mapbox_access_token = os.environ.get('MAPBOX_TOKEN')
@@ -85,13 +83,22 @@ def get_latlong_and_zoom(location):
     return DEFAULT_LATITUDE, DEFAULT_LONGITUDE, DEFAULT_ZOOM
 
 def get_choropleth_mapbox():
-    fig = go.Figure(go.Choroplethmapbox(geojson=counties, locations=df_usa.FIPS,
-                                        z=np.log10(df_usa.Confirmed),
-                                        colorscale="Viridis",
-                                        zmin=0, zmax=df_usa.Confirmed.max(), marker_line_width=0))
-    fig.update_layout(mapbox_style="light", mapbox_accesstoken=mapbox_access_token,
+    data = []
+    data.append(go.Choroplethmapbox(geojson=counties, locations=df_usa[COL_FIPS],
+                        z=df_usa[COL_CONFIRMED],
+                        colorscale='Reds',
+                        autocolorscale=False,
+                        marker_line_width=0,
+                        text=df_usa[COL_HOVERTEXT],  # hover text
+                        colorbar_title='No. of Confirmed cases'))
+    fig = go.Figure(
+        data=data
+        )
+
+    fig.update_layout(mapbox_style="dark", mapbox_accesstoken=mapbox_access_token,
                       mapbox_zoom=3, mapbox_center={"lat": 37.0902, "lon": -95.7129})
     fig.update_layout(margin={"r": 0, "t": 0, "l": 0, "b": 0})
+
     return fig
 
 def get_mapbox(center_latitude, center_longitude, zoom):
@@ -134,7 +141,7 @@ def get_mapbox(center_latitude, center_longitude, zoom):
         data=[datamap],
         layout=layout
     )
-    return fig
+    return {}
 
 
 def serve_layout():
