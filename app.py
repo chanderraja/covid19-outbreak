@@ -27,14 +27,32 @@ COL_HOVERTEXT='Hovertext'
 
 
 url='https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/'+\
-    'csse_covid_19_data/csse_covid_19_daily_reports/03-25-2020.csv'
+    'csse_covid_19_data/csse_covid_19_daily_reports/03-29-2020.csv'
 df=pd.read_csv(url, dtype={COL_FIPS: str})
+
+df_countries = df.drop(columns=[COL_FIPS, COL_PROVINCE_STATE, COL_ADMIN2, COL_LATITUDE, COL_LONGITUDE, COL_LOC_COMBINED])
+aggregation_functions = {COL_CONFIRMED: 'sum', COL_DEATHS: 'sum', COL_RECOVERED: 'sum', COL_ACTIVE: 'sum'}
+df_countries = df_countries.groupby(df[COL_COUNTRY_REGION]).aggregate(aggregation_functions)
+
 
 with urlopen('https://raw.githubusercontent.com/plotly/datasets/master/geojson-counties-fips.json') as response:
     counties = json.load(response)
 
+with open('countries.geojson') as f:
+    countries = json.load(f)
+
+pass
+
 def get_location(row):
-    return row[COL_LOC_COMBINED]
+    if COL_LOC_COMBINED in row.index:
+        return row[COL_LOC_COMBINED]
+    if COL_PROVINCE_STATE in row.index:
+        if COL_COUNTRY_REGION in row.index:
+            return row[COL_PROVINCE_STATE] + ', ' + row[COL_COUNTRY_REGION]
+        else:
+            return row[COL_PROVINCE_STATE]
+    return row.name
+
 
 def get_hovertext(row):
     return get_location(row) + '<br>' + \
@@ -44,6 +62,8 @@ def get_hovertext(row):
            'Active =' + str(row[COL_ACTIVE])
 
 df[COL_HOVERTEXT] = df.apply(lambda row: get_hovertext(row), axis=1)
+
+df_countries[COL_HOVERTEXT] = df_countries.apply(lambda row: get_hovertext(row), axis=1)
 
 df_usa = df[df[COL_COUNTRY_REGION]=='US']
 df_usa = df[df[COL_FIPS].notna()] # drop rows with NaN in FIPS column
@@ -82,14 +102,17 @@ def get_latlong_and_zoom(location):
             return row[COL_LATITUDE], row[COL_LONGITUDE], zoom
     return DEFAULT_LATITUDE, DEFAULT_LONGITUDE, DEFAULT_ZOOM
 
-def get_choropleth_mapbox():
+def get_choropleth_mapbox(geojson, locations, z, text, featureidkey=None):
     data = []
-    data.append(go.Choroplethmapbox(geojson=counties, locations=df_usa[COL_FIPS],
-                        z=df_usa[COL_CONFIRMED],
+    data.append(go.Choroplethmapbox(
+                        geojson=geojson,
+                        locations=locations,
+                        featureidkey=featureidkey,
+                        z=z,
                         colorscale='Reds',
                         autocolorscale=False,
                         marker_line_width=0,
-                        text=df_usa[COL_HOVERTEXT],  # hover text
+                        text=text,  # hover text
                         colorbar_title='No. of Confirmed cases'))
     fig = go.Figure(
         data=data
@@ -145,6 +168,18 @@ def get_mapbox(center_latitude, center_longitude, zoom):
 
 
 def serve_layout():
+    locations = []
+    cases = []
+    text = []
+    for feat in countries['features']:
+        loc = feat['properties']['ADMIN']
+        feat['id'] = loc
+        if loc in df_countries.index:
+            row = df_countries.loc[loc]
+            locations.append(loc)
+            cases.append(row[COL_CONFIRMED])
+            text.append(row[COL_HOVERTEXT])
+
     return html.Div(
         [
             html.H4(
@@ -173,12 +208,18 @@ def serve_layout():
                               value=''),
                     dcc.Graph(
                         id='id-mapbox-world',
-                        figure={})
+                        figure=get_choropleth_mapbox(geojson=countries,
+                                                     locations=locations,
+                                                     z=cases,
+                                                     text=text))
                 ]),
                 dcc.Tab(label='USA', children=[
                     dcc.Graph(
                         id='id-mapbox-usa',
-                        figure=get_choropleth_mapbox())
+                        figure=get_choropleth_mapbox(geojson=counties,
+                                                     locations=df_usa[COL_FIPS],
+                                                     z=df_usa[COL_CONFIRMED],
+                                                     text=df_usa[COL_HOVERTEXT]))
                 ]),
             ]),
         ]
