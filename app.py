@@ -33,6 +33,8 @@ df=pd.read_csv(url, dtype={COL_FIPS: str})
 df_countries = df.drop(columns=[COL_FIPS, COL_PROVINCE_STATE, COL_ADMIN2, COL_LATITUDE, COL_LONGITUDE, COL_LOC_COMBINED])
 aggregation_functions = {COL_CONFIRMED: 'sum', COL_DEATHS: 'sum', COL_RECOVERED: 'sum', COL_ACTIVE: 'sum'}
 df_countries = df_countries.groupby(df[COL_COUNTRY_REGION]).aggregate(aggregation_functions)
+df_countries.rename(index={'US': 'United States of America'},inplace=True)
+
 
 
 with urlopen('https://raw.githubusercontent.com/plotly/datasets/master/geojson-counties-fips.json') as response:
@@ -102,24 +104,55 @@ def get_latlong_and_zoom(location):
             return row[COL_LATITUDE], row[COL_LONGITUDE], zoom
     return DEFAULT_LATITUDE, DEFAULT_LONGITUDE, DEFAULT_ZOOM
 
-def get_choropleth_mapbox(geojson, locations, z, text, featureidkey=None):
+
+def discrete_colorscale(bvals, colors):
+    """
+    bvals - list of values bounding intervals/ranges of interest
+    colors - list of rgb or hex colorcodes for values in [bvals[k], bvals[k+1]],0<=k < len(bvals)-1
+    returns the plotly  discrete colorscale
+    """
+    if len(bvals) != len(colors) + 1:
+        raise ValueError('len(boundary values) should be equal to  len(colors)+1')
+    bvals = sorted(bvals)
+    nvals = [(v - bvals[0]) / (bvals[-1] - bvals[0]) for v in bvals]  # normalized values
+
+    dcolorscale = []  # discrete colorscale
+    for k in range(len(colors)):
+        dcolorscale.extend([[nvals[k], colors[k]], [nvals[k + 1], colors[k]]])
+    return dcolorscale
+
+def get_choropleth_mapbox(geojson, locations, z, hovertext, colorscale, tickvals, ticktext, featureidkey=None):
+    bvals = [0, 1, 2, 3, 4, 5, 6]
+    colors = ['#ffffff', '#ffa07a', '#ff6400', '#ff4500', '#b22222', '#8b0000']
+    dcolorscale = discrete_colorscale(bvals, colors)
+    bvalsexp = [np.power(10,x) for x in bvals]
+    bvalsexp = np.array(bvalsexp)
+    bvals = np.array(bvals)
+    tickvals = [np.mean(bvals[k:k + 2]) for k in
+                range(len(bvals) - 1)]  # position with respect to bvals where ticktext is displayed
+    ticktext = [f'<{bvalsexp[1]:,}'] + [f'{bvalsexp[k]:,}-{bvalsexp[k + 1]:,}' for k in range(1, len(bvalsexp) - 2)] + [f'>{bvalsexp[-2]:,}']
+
+
     data = []
     data.append(go.Choroplethmapbox(
                         geojson=geojson,
                         locations=locations,
                         featureidkey=featureidkey,
+                        colorscale=dcolorscale,
+                        colorbar=dict(thickness=25,
+                            tickvals=tickvals,
+                            ticktext=ticktext),
                         z=z,
-                        colorscale='Reds',
-                        autocolorscale=False,
                         marker_line_width=0,
-                        text=text,  # hover text
-                        colorbar_title='No. of Confirmed cases'))
+                        text=hovertext,
+                        hoverinfo='text'))
+
     fig = go.Figure(
         data=data
         )
 
-    fig.update_layout(mapbox_style="dark", mapbox_accesstoken=mapbox_access_token,
-                      mapbox_zoom=3, mapbox_center={"lat": 37.0902, "lon": -95.7129})
+    fig.update_layout(mapbox_style="basic", mapbox_accesstoken=mapbox_access_token,
+                      mapbox_zoom=1, mapbox_center={"lat": 37.0902, "lon": 0.0})
     fig.update_layout(margin={"r": 0, "t": 0, "l": 0, "b": 0})
 
     return fig
@@ -176,14 +209,15 @@ def serve_layout():
         feat['id'] = loc
         if loc in df_countries.index:
             row = df_countries.loc[loc]
-            locations.append(loc)
-            cases.append(row[COL_CONFIRMED])
-            text.append(row[COL_HOVERTEXT])
+            if row[COL_CONFIRMED] != 0:
+                locations.append(loc)
+                cases.append(np.log10(row[COL_CONFIRMED]))
+                text.append(row[COL_HOVERTEXT])
 
     return html.Div(
         [
             html.H4(
-                'COVID-19 Outbreak Dashboard',
+                'Dashboard',
                 style={
                     'color': 'blue',
                     'font-style': 'italic',
@@ -210,6 +244,7 @@ def serve_layout():
                         id='id-mapbox-world',
                         figure=get_choropleth_mapbox(geojson=countries,
                                                      locations=locations,
+                                                     featureidkey='properties.ADMIN',
                                                      z=cases,
                                                      text=text))
                 ]),
@@ -228,6 +263,7 @@ def serve_layout():
 
 app.layout = serve_layout()
 
+'''
 @app.callback(
     Output('id-mapbox-world', 'figure'),
     [Input('id-input-loc', 'value')]
@@ -236,6 +272,6 @@ def location_selected(location):
     lat, long, zoom = get_latlong_and_zoom(location)
     app.logger.warning(f'location={location}, lat={lat}, long={long}, zoom={zoom}')
     return get_mapbox(lat, long, zoom)
-
+'''
 if __name__ == '__main__':
     app.run_server(debug=True)
