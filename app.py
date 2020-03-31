@@ -11,6 +11,7 @@ import requests
 import json
 from urllib.request import urlopen
 import numpy as np
+from plotutils import get_choropleth_mapbox, discrete_colorscale
 
 COL_FIPS='FIPS'
 COL_PROVINCE_STATE='Province_State'
@@ -43,7 +44,6 @@ with urlopen('https://raw.githubusercontent.com/plotly/datasets/master/geojson-c
 with open('countries.geojson') as f:
     countries = json.load(f)
 
-pass
 
 def get_location(row):
     if COL_LOC_COMBINED in row.index:
@@ -104,100 +104,61 @@ def get_latlong_and_zoom(location):
             return row[COL_LATITUDE], row[COL_LONGITUDE], zoom
     return DEFAULT_LATITUDE, DEFAULT_LONGITUDE, DEFAULT_ZOOM
 
+def get_choropleth_mapbox_world():
+    locations = []
+    cases = []
+    text = []
+    for feat in countries['features']:
+        country = feat['properties']['ADMIN']
+        if country in df_countries.index:
+            row = df_countries.loc[country]
+            if row[COL_CONFIRMED] != 0:
+                locations.append(country)
+                cases.append(np.log10(row[COL_CONFIRMED]))
+                text.append(row[COL_HOVERTEXT])
 
-def discrete_colorscale(bvals, colors):
-    """
-    bvals - list of values bounding intervals/ranges of interest
-    colors - list of rgb or hex colorcodes for values in [bvals[k], bvals[k+1]],0<=k < len(bvals)-1
-    returns the plotly  discrete colorscale
-    """
-    if len(bvals) != len(colors) + 1:
-        raise ValueError('len(boundary values) should be equal to  len(colors)+1')
-    bvals = sorted(bvals)
-    nvals = [(v - bvals[0]) / (bvals[-1] - bvals[0]) for v in bvals]  # normalized values
+    featureid_key = 'properties.ADMIN'
+    bvals = [0, 1, 2, 3, 4, 5, 6] # number of cases expressed as exponents of 10
+    colors = ['#ffe81d', '#ffa07a', '#ff6400', '#ff4500', '#b22222', '#8b0000']
+    dcolorscale, tickvals, ticktext = discrete_colorscale(bvals, colors, ticktext_exp=True)
 
-    dcolorscale = []  # discrete colorscale
-    for k in range(len(colors)):
-        dcolorscale.extend([[nvals[k], colors[k]], [nvals[k + 1], colors[k]]])
-    return dcolorscale
-
-def get_choropleth_mapbox(geojson, locations, z, hovertext, colorscale, tickvals, ticktext, featureidkey=None):
-    bvals = [0, 1, 2, 3, 4, 5, 6]
-    colors = ['#ffffff', '#ffa07a', '#ff6400', '#ff4500', '#b22222', '#8b0000']
-    dcolorscale = discrete_colorscale(bvals, colors)
-    bvalsexp = [np.power(10,x) for x in bvals]
-    bvalsexp = np.array(bvalsexp)
-    bvals = np.array(bvals)
-    tickvals = [np.mean(bvals[k:k + 2]) for k in
-                range(len(bvals) - 1)]  # position with respect to bvals where ticktext is displayed
-    ticktext = [f'<{bvalsexp[1]:,}'] + [f'{bvalsexp[k]:,}-{bvalsexp[k + 1]:,}' for k in range(1, len(bvalsexp) - 2)] + [f'>{bvalsexp[-2]:,}']
-
-
-    data = []
-    data.append(go.Choroplethmapbox(
-                        geojson=geojson,
-                        locations=locations,
-                        featureidkey=featureidkey,
-                        colorscale=dcolorscale,
-                        colorbar=dict(thickness=25,
-                            tickvals=tickvals,
-                            ticktext=ticktext),
-                        z=z,
-                        marker_line_width=0,
-                        text=hovertext,
-                        hoverinfo='text'))
-
-    fig = go.Figure(
-        data=data
-        )
-
-    fig.update_layout(mapbox_style="basic", mapbox_accesstoken=mapbox_access_token,
-                      mapbox_zoom=1, mapbox_center={"lat": 37.0902, "lon": 0.0})
-    fig.update_layout(margin={"r": 0, "t": 0, "l": 0, "b": 0})
-
+    fig = get_choropleth_mapbox(geojson=countries,
+                                locations=locations,
+                                z=cases,
+                                hovertext=text,
+                                colorscale=dcolorscale,
+                                tickvals=tickvals,
+                                ticktext=ticktext,
+                                mapbox_token=mapbox_access_token,
+                                featureid_key=featureid_key)
     return fig
 
-def get_mapbox(center_latitude, center_longitude, zoom):
-    datamap =  dict(
-        type='scattermapbox',
-        lat=df[COL_LATITUDE],
-        lon=df[COL_LONGITUDE],
-        mode='markers',
-        marker=go.scattermapbox.Marker(
-            size=df[COL_CONFIRMED],
-            sizeref=2.*df[COL_CONFIRMED].values.max()/(100**2),
-            sizemode='area',
-            color='rgb(180,0,0)',
-        ),
-        text=df[COL_HOVERTEXT]
-    )
-    layout = dict(
-        autosize=True,
-        hovermode='closest',
-        geo = dict(
-            projection = dict(
-                type = 'equirectangular'
-            ),
-        ),
-        mapbox=dict(
-            style='dark',
-            accesstoken=mapbox_access_token,
-            bearing=0,
-            center=dict(
-                lat=center_latitude,
-                lon=center_longitude
-            ),
-            pitch=0,
-            zoom=zoom
-        ),
-        height=800,
-    )
 
-    fig = dict(
-        data=[datamap],
-        layout=layout
-    )
-    return {}
+def get_choropleth_mapbox_us_counties():
+    bvals = [
+        0, # 1
+        1, # 10
+        2, # 100
+        2.69897, # 500
+        3, # 1000
+        4, # 10k
+        4.69897, # 50k
+        5, # 100k
+        6.69897, # 100 k
+        6] # number of cases expressed as exponents of 10
+    colors = ['#ffe81d', '#ffd03c', '#ffa07a', '#ff6400', '#ff5480', '#ff4500', '#b22222', '#9e9111', '#8b0000']
+    dcolorscale, tickvals, ticktext = discrete_colorscale(bvals, colors, ticktext_exp=True)
+    df_positive = df_usa[df_usa[COL_CONFIRMED] > 0]
+    fig = get_choropleth_mapbox(geojson=counties,
+                                locations=df_positive[COL_FIPS],
+                                z=np.log10(df_positive[COL_CONFIRMED]),
+                                hovertext=df_positive[COL_HOVERTEXT],
+                                colorscale=dcolorscale,
+                                tickvals=tickvals,
+                                ticktext=ticktext,
+                                mapbox_token=mapbox_access_token)
+    return fig
+
 
 
 def serve_layout():
@@ -236,25 +197,22 @@ def serve_layout():
 
             dcc.Tabs([
                 dcc.Tab(label='World', children=[
-                    dcc.Input(id='id-input-loc',
-                              type='text',
-                              list='id-list-suggested-inputs',
-                              value=''),
+                    dcc.Input(
+                        id='id-input-loc',
+                        type='text',
+                        list='id-list-suggested-inputs',
+                        value=''
+                    ),
                     dcc.Graph(
                         id='id-mapbox-world',
-                        figure=get_choropleth_mapbox(geojson=countries,
-                                                     locations=locations,
-                                                     featureidkey='properties.ADMIN',
-                                                     z=cases,
-                                                     text=text))
+                        figure=get_choropleth_mapbox_world()
+                    )
                 ]),
                 dcc.Tab(label='USA', children=[
-                    dcc.Graph(
+                     dcc.Graph(
                         id='id-mapbox-usa',
-                        figure=get_choropleth_mapbox(geojson=counties,
-                                                     locations=df_usa[COL_FIPS],
-                                                     z=df_usa[COL_CONFIRMED],
-                                                     text=df_usa[COL_HOVERTEXT]))
+                        figure=get_choropleth_mapbox_us_counties()
+                     )
                 ]),
             ]),
         ]
