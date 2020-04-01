@@ -56,7 +56,8 @@ def get_choropleth_mapbox(geojson, locations, z, hovertext, colorscale,
     fig = go.Figure(data=data)
 
     fig.update_layout(mapbox_style="dark", mapbox_accesstoken=mapbox_token,
-                      mapbox_zoom=1, mapbox_center={"lat": 37.0902, "lon": 0.0})
+                      mapbox_zoom=2, mapbox_center={"lat": 37.0902, "lon": 0.0}
+    )
     fig.update_layout(margin={"r": 0, "t": 0, "l": 0, "b": 0})
     return fig
 

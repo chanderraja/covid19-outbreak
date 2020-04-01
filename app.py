@@ -3,6 +3,7 @@ import plotly.graph_objects as go
 import dash
 import dash_core_components as dcc
 import dash_html_components as html
+import dash_bootstrap_components as dbc
 from dash.dependencies import Input, Output, State
 from dash.exceptions import PreventUpdate
 import pandas as pd
@@ -41,7 +42,7 @@ df_countries.rename(index={'US': 'United States of America'},inplace=True)
 with urlopen('https://raw.githubusercontent.com/plotly/datasets/master/geojson-counties-fips.json') as response:
     counties = json.load(response)
 
-with open('countries.geojson') as f:
+with open('countries.geo.json') as f:
     countries = json.load(f)
 
 
@@ -70,7 +71,7 @@ df_countries[COL_HOVERTEXT] = df_countries.apply(lambda row: get_hovertext(row),
 df_usa = df[df[COL_COUNTRY_REGION]=='US']
 df_usa = df[df[COL_FIPS].notna()] # drop rows with NaN in FIPS column
 
-external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
+external_stylesheets = [dbc.themes.SIMPLEX]
 mapbox_access_token = os.environ.get('MAPBOX_TOKEN')
 app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
 server = app.server
@@ -109,7 +110,7 @@ def get_choropleth_mapbox_world():
     cases = []
     text = []
     for feat in countries['features']:
-        country = feat['properties']['ADMIN']
+        country = feat['properties']['name']
         if country in df_countries.index:
             row = df_countries.loc[country]
             if row[COL_CONFIRMED] != 0:
@@ -117,7 +118,7 @@ def get_choropleth_mapbox_world():
                 cases.append(np.log10(row[COL_CONFIRMED]))
                 text.append(row[COL_HOVERTEXT])
 
-    featureid_key = 'properties.ADMIN'
+    featureid_key = 'properties.name'
     bvals = [0, 1, 2, 3, 4, 5, 6] # number of cases expressed as exponents of 10
     colors = ['#ffe81d', '#ffa07a', '#ff6400', '#ff4500', '#b22222', '#8b0000']
     dcolorscale, tickvals, ticktext = discrete_colorscale(bvals, colors, ticktext_exp=True)
@@ -162,18 +163,6 @@ def get_choropleth_mapbox_us_counties():
 
 
 def serve_layout():
-    locations = []
-    cases = []
-    text = []
-    for feat in countries['features']:
-        loc = feat['properties']['ADMIN']
-        feat['id'] = loc
-        if loc in df_countries.index:
-            row = df_countries.loc[loc]
-            if row[COL_CONFIRMED] != 0:
-                locations.append(loc)
-                cases.append(np.log10(row[COL_CONFIRMED]))
-                text.append(row[COL_HOVERTEXT])
 
     return html.Div(
         [
@@ -190,33 +179,38 @@ def serve_layout():
                     'right-margin': 'auto'
                 }
             ),
-            html.Datalist(
-                id='id-list-suggested-inputs',
-                children=[html.Option(value=word) for word in location_suggestions]
-            ),
-
-            dcc.Tabs([
-                dcc.Tab(label='World', children=[
-                    dcc.Input(
-                        id='id-input-loc',
-                        type='text',
-                        list='id-list-suggested-inputs',
-                        value=''
+            dbc.Row(
+                [
+                    dbc.Col(
+                        html.Div(
+                            [
+                                dcc.Graph(
+                                    id='id-mapbox-world',
+                                    figure=get_choropleth_mapbox_world()
+                                ),
+                            ]
+                        ),  width={"size": 6, "offset": 3},
                     ),
-                    dcc.Graph(
-                        id='id-mapbox-world',
-                        figure=get_choropleth_mapbox_world()
-                    )
-                ]),
-                dcc.Tab(label='USA', children=[
-                     dcc.Graph(
-                        id='id-mapbox-usa',
-                        figure=get_choropleth_mapbox_us_counties()
-                     )
-                ]),
-            ]),
+                ]
+            ),
+            html.Br(),
+            dbc.Row(
+                [
+                    dbc.Col(
+                        html.Div(
+                            [
+                                dcc.Graph(
+                                    id='id-mapbox-usa',
+                                    figure=get_choropleth_mapbox_us_counties()
+                                ),
+                            ]
+                        ), width={"size": 6, "offset": 3},
+                    ),
+                ]
+            ),
         ]
     )
+
 
 
 app.layout = serve_layout()
