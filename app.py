@@ -12,7 +12,7 @@ import requests
 import json
 from urllib.request import urlopen
 import numpy as np
-from plotutils import get_choropleth_mapbox, discrete_colorscale
+from plotutils import get_choropleth_mapbox, discrete_colorscale, interpolated_colors
 
 COL_FIPS='FIPS'
 COL_PROVINCE_STATE='Province_State'
@@ -120,7 +120,7 @@ def get_choropleth_mapbox_world():
 
     featureid_key = 'properties.name'
     bvals = [0, 1, 2, 3, 4, 5, 6] # number of cases expressed as exponents of 10
-    colors = ['#ffe81d', '#ffa07a', '#ff6400', '#ff4500', '#b22222', '#8b0000']
+    colors = interpolated_colors('#ffe81d', '#8b0000', len(bvals)-1)
     dcolorscale, tickvals, ticktext = discrete_colorscale(bvals, colors, ticktext_exp=True)
 
     fig = get_choropleth_mapbox(geojson=countries,
@@ -147,7 +147,7 @@ def get_choropleth_mapbox_us_counties():
         5, # 100k
         6.69897, # 100 k
         6] # number of cases expressed as exponents of 10
-    colors = ['#ffe81d', '#ffd03c', '#ffa07a', '#ff6400', '#ff5480', '#ff4500', '#b22222', '#9e9111', '#8b0000']
+    colors = interpolated_colors('#ffe81d', '#8b0000', len(bvals)-1)
     dcolorscale, tickvals, ticktext = discrete_colorscale(bvals, colors, ticktext_exp=True)
     df_positive = df_usa[df_usa[COL_CONFIRMED] > 0]
     fig = get_choropleth_mapbox(geojson=counties,

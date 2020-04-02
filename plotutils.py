@@ -1,6 +1,47 @@
 import numpy as np
 import plotly.graph_objects as go
 
+def rgb_str_to_tuple(rgb_str):
+    """
+    convert color string in #rrggbb format into separate R,G and B values
+    :param rgb_str: rgb_str in '#rrggbb' hex format
+    :return: tuple containing R, G and B values as ints
+    """
+    s = rgb_str.lstrip('#')
+    return tuple(int(s[i:i+2], 16) for i in (0, 2, 4))
+
+
+def rgb_tuple_to_str(rgb):
+    """
+    convert color string in #rrggbb format into separate R,G and B values
+    :param rgb: tuple containing r, g and b values
+    :return: string in '#rrggbb' hex format
+    """
+    rgb_str = '#'
+    for i in range(0,3):
+        rgb_str += f'{rgb[i]:02x}'
+    return rgb_str
+
+def interpolated_colors(color1, color2, n):
+    """
+    return an interpolated sequence of colors
+    :param color1: starting color in plotly hex format '#RRGGBB'
+    :param color2: ending color in plotly hex format '#RRGGBB'
+    :param n: number of colors to return
+    :return: list of linearly interpolated Plotly color sequence starting with color1 and ending with color2 inclusive
+    """
+    rgb1 = rgb_str_to_tuple(color1)
+    rgb2 = rgb_str_to_tuple(color2)
+    colors = []
+    r_list = np.linspace(rgb1[0], rgb2[0], num=n, endpoint=True, dtype=int)
+    g_list = np.linspace(rgb1[1], rgb2[1], num=n, endpoint=True, dtype=int)
+    b_list = np.linspace(rgb1[2], rgb2[2], num=n, endpoint=True, dtype=int)
+    for i in range(0, n):
+        rgb = (r_list[i], g_list[i], b_list[i])
+        colors.append(rgb_tuple_to_str(rgb))
+    return colors
+
+
 def discrete_colorscale(bvals, colors, ticktext_exp=False):
     """
     bvals - list of values bounding intervals/ranges of interest
@@ -58,7 +99,7 @@ def get_choropleth_mapbox(geojson, locations, z, hovertext, colorscale,
     fig.update_layout(mapbox_style="dark", mapbox_accesstoken=mapbox_token,
                       mapbox_zoom=2, mapbox_center={"lat": 37.0902, "lon": 0.0}
     )
-    fig.update_layout(margin={"r": 0, "t": 0, "l": 0, "b": 0})
+    fig.update_layout(margin={"r": 0, "t": 0, "l": 20, "b": 0})
     return fig
 
 
