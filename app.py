@@ -28,8 +28,10 @@ COL_LOC_COMBINED='Combined_Key'
 COL_HOVERTEXT='Hovertext'
 
 
-url='https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/'+\
-    'csse_covid_19_data/csse_covid_19_daily_reports/03-29-2020.csv'
+#url='https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/'+\
+#    'csse_covid_19_data/csse_covid_19_daily_reports/03-29-2020.csv'
+
+url = './covid-19-data/csse_covid_19_data/csse_covid_19_daily_reports/04-01-2020.csv'
 df=pd.read_csv(url, dtype={COL_FIPS: str})
 
 df_countries = df.drop(columns=[COL_FIPS, COL_PROVINCE_STATE, COL_ADMIN2, COL_LATITUDE, COL_LONGITUDE, COL_LOC_COMBINED])
@@ -39,8 +41,16 @@ df_countries.rename(index={'US': 'United States of America'},inplace=True)
 
 
 
-with urlopen('https://raw.githubusercontent.com/plotly/datasets/master/geojson-counties-fips.json') as response:
-    counties = json.load(response)
+#with urlopen('https://raw.githubusercontent.com/plotly/datasets/master/geojson-counties-fips.json') as response:
+#    counties = json.load(response)
+
+with open('us_counties_2010.json') as f:
+    us_counties = json.load(f)
+    for feat in us_counties['features']:
+        state_fips = feat['properties']['STATE']
+        county_fips = feat['properties']['COUNTY']
+        feat['id'] = state_fips + county_fips
+
 
 with open('countries.geo.json') as f:
     countries = json.load(f)
@@ -115,49 +125,37 @@ def get_choropleth_mapbox_world():
             row = df_countries.loc[country]
             if row[COL_CONFIRMED] != 0:
                 locations.append(country)
-                cases.append(np.log10(row[COL_CONFIRMED]))
+                cases.append(row[COL_CONFIRMED])
                 text.append(row[COL_HOVERTEXT])
 
     featureid_key = 'properties.name'
-    bvals = [0, 1, 2, 3, 4, 5, 6] # number of cases expressed as exponents of 10
-    colors = interpolated_colors('#ffe81d', '#8b0000', len(bvals)-1)
-    dcolorscale, tickvals, ticktext = discrete_colorscale(bvals, colors, ticktext_exp=True)
+    bvals = [1, 10, 50, 100, 500, 1000, 5000, 10000, 50000, 100000, 500000, 1000000, 5000000, 10000000]
 
     fig = get_choropleth_mapbox(geojson=countries,
                                 locations=locations,
                                 z=cases,
+                                color_boundaries = bvals,
+                                color_min = '#ffff3F',
+                                color_max = '#ff0000',
                                 hovertext=text,
-                                colorscale=dcolorscale,
-                                tickvals=tickvals,
-                                ticktext=ticktext,
                                 mapbox_token=mapbox_access_token,
+                                logarithmic=True,
                                 featureid_key=featureid_key)
     return fig
 
 
 def get_choropleth_mapbox_us_counties():
-    bvals = [
-        0, # 1
-        1, # 10
-        2, # 100
-        2.69897, # 500
-        3, # 1000
-        4, # 10k
-        4.69897, # 50k
-        5, # 100k
-        6.69897, # 100 k
-        6] # number of cases expressed as exponents of 10
-    colors = interpolated_colors('#ffe81d', '#8b0000', len(bvals)-1)
-    dcolorscale, tickvals, ticktext = discrete_colorscale(bvals, colors, ticktext_exp=True)
-    df_positive = df_usa[df_usa[COL_CONFIRMED] > 0]
-    fig = get_choropleth_mapbox(geojson=counties,
+    bvals = [1, 10, 50, 100, 500, 1000, 5000, 10000, 50000, 100000, 500000]
+    df_positive = df_usa[df_usa[COL_CONFIRMED] != 0]
+    fig = get_choropleth_mapbox(geojson=us_counties,
                                 locations=df_positive[COL_FIPS],
-                                z=np.log10(df_positive[COL_CONFIRMED]),
+                                z=df_positive[COL_CONFIRMED],
+                                color_boundaries = bvals,
+                                color_min = '#ffff00',
+                                color_max = '#ff0000',
                                 hovertext=df_positive[COL_HOVERTEXT],
-                                colorscale=dcolorscale,
-                                tickvals=tickvals,
-                                ticktext=ticktext,
-                                mapbox_token=mapbox_access_token)
+                                mapbox_token=mapbox_access_token,
+                                logarithmic = True)
     return fig
 
 
