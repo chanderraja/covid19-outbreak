@@ -2,6 +2,17 @@ import numpy as np
 import math
 import plotly.graph_objects as go
 
+
+def __shorten(n):
+    if n < 1000:
+        return f'{n}'
+    if n < 1E6:
+        return f'{n/1E3:g}k'
+    if n < 1E9:
+        return f'{n/1E6:g}m'
+    return f'{n/1E9:g}B'
+
+
 def rgb_str_to_tuple(rgb_str):
     """
     convert color string in #rrggbb format into separate R,G and B values
@@ -43,7 +54,7 @@ def interpolated_colors(color1, color2, n):
     return colors
 
 
-def discrete_colorscale(bvals, colors, logarithmic=False):
+def discrete_colorscale(bvals, colors, logarithmic=False, shorten_ticktext=True):
     """
     bvals - list of values bounding intervals/ranges of interest
     colors - list of rgb or hex colorcodes for values in [bvals[k], bvals[k+1]],0<=k < len(bvals)-1
@@ -63,9 +74,13 @@ def discrete_colorscale(bvals, colors, logarithmic=False):
     bvals = np.array(bvals)
     tickvals = [np.mean(bvals[k:k + 2]) for k in
                 range(len(bvals) - 1)]  # position with respect to bvals where ticktext is displayed
-#    bvals_text = np.array(bvals_text)
-    ticktext = [f'<{bvals_orig[1]:,}'] + [f'{bvals_orig[k]:,}-{bvals_orig[k + 1]:,}'
-                                          for k in range(1, len(bvals_orig) - 2)] + [f'>{bvals_orig[-2]:,}']
+
+    if shorten_ticktext is True:
+        cscale_text = [__shorten(x) for x in bvals_orig]
+    else:
+        cscale_text = [f'{x:,g}' for x in bvals_orig]
+    ticktext = [f'<{cscale_text[1]}'] + [f'{cscale_text[k]}-{cscale_text[k + 1]}'
+                                          for k in range(1, len(cscale_text) - 2)] + [f'>{cscale_text[-2]}']
     zmin = bvals[0]
     zmax = bvals[-1]
     return dcolorscale, tickvals, ticktext, zmin, zmax
@@ -73,7 +88,7 @@ def discrete_colorscale(bvals, colors, logarithmic=False):
 
 def get_choropleth_mapbox(geojson, locations, z, hovertext,  mapbox_token,
                           color_boundaries, color_min, color_max,
-                          logarithmic=False, featureid_key=None):
+                          name=None, logarithmic=False, featureid_key=None):
     """
     geojson - geojson in dict format
     locations - list of locations matching those in the geoJSON for which data values needs to be plotted
@@ -90,31 +105,34 @@ def get_choropleth_mapbox(geojson, locations, z, hovertext,  mapbox_token,
     colors = interpolated_colors(color_min, color_max, len(color_boundaries)-1)
     colorscale, tickvals, ticktext, zmin, zmax = discrete_colorscale(color_boundaries, colors, logarithmic)
     data = []
-    data.append(go.Choroplethmapbox(
-                        geojson=geojson,
-                        locations=locations,
-                        featureidkey=featureid_key,
-                        colorscale=colorscale,
-                        colorbar=dict(
-                            thickness=25,
-                            tickvals=tickvals,
-                            ticktext=ticktext),
-                        z=z if not logarithmic else np.log10(z),
-                        zmin=zmin,
-                        zmax=zmax,
-                        marker_line_width=0,
-                        text=hovertext,
-                        hoverinfo='text'))
+    data.append(
+        go.Choroplethmapbox(
+            geojson=geojson,
+            locations=locations,
+            featureidkey=featureid_key,
+            colorscale=colorscale,
+            colorbar=dict(
+                thickness=25,
+                tickvals=tickvals,
+                ticktext=ticktext),
+            z=z if not logarithmic else np.log10(z),
+            zmin=zmin,
+            zmax=zmax,
+            marker_line_width=1,
+            marker_line_color='white',
+            text=hovertext,
+            hoverinfo='text'))
 
     fig = go.Figure(data=data)
 
     fig.update_layout(
-        mapbox_style="light",
+        title=name,
+        mapbox_style="dark",
         mapbox_accesstoken=mapbox_token,
         mapbox_zoom=2,
         mapbox_center={"lat": 37.0902, "lon": -95.7129}
     )
-    fig.update_layout(margin={"r": 0, "t": 10, "l": 10, "b": 0})
+    fig.update_layout(margin={"r": 10, "t": 40, "l": 10, "b": 10})
     return fig
 
 

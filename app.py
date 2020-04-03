@@ -37,9 +37,12 @@ df=pd.read_csv(url, dtype={COL_FIPS: str})
 df_countries = df.drop(columns=[COL_FIPS, COL_PROVINCE_STATE, COL_ADMIN2, COL_LATITUDE, COL_LONGITUDE, COL_LOC_COMBINED])
 aggregation_functions = {COL_CONFIRMED: 'sum', COL_DEATHS: 'sum', COL_RECOVERED: 'sum', COL_ACTIVE: 'sum'}
 df_countries = df_countries.groupby(df[COL_COUNTRY_REGION]).aggregate(aggregation_functions)
-df_countries.rename(index={'US': 'United States of America'},inplace=True)
-
-
+df_countries.rename(
+    index={
+        'US': 'United States of America',
+        'Congo (Brazzaville)': 'Republic of the Congo',
+        'Congo (Kinshasa)': 'Democratic Republic of the Congo'
+    }, inplace=True)
 
 #with urlopen('https://raw.githubusercontent.com/plotly/datasets/master/geojson-counties-fips.json') as response:
 #    counties = json.load(response)
@@ -81,7 +84,7 @@ df_countries[COL_HOVERTEXT] = df_countries.apply(lambda row: get_hovertext(row),
 df_usa = df[df[COL_COUNTRY_REGION]=='US']
 df_usa = df[df[COL_FIPS].notna()] # drop rows with NaN in FIPS column
 
-external_stylesheets = [dbc.themes.SIMPLEX]
+external_stylesheets = [dbc.themes.DARKLY]
 mapbox_access_token = os.environ.get('MAPBOX_TOKEN')
 app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
 server = app.server
@@ -131,7 +134,8 @@ def get_choropleth_mapbox_world():
     featureid_key = 'properties.name'
     bvals = [1, 10, 50, 100, 500, 1000, 5000, 10000, 50000, 100000, 500000, 1000000, 5000000, 10000000]
 
-    fig = get_choropleth_mapbox(geojson=countries,
+    fig = get_choropleth_mapbox(name='World',
+                                geojson=countries,
                                 locations=locations,
                                 z=cases,
                                 color_boundaries = bvals,
@@ -147,7 +151,8 @@ def get_choropleth_mapbox_world():
 def get_choropleth_mapbox_us_counties():
     bvals = [1, 10, 50, 100, 500, 1000, 5000, 10000, 50000, 100000, 500000]
     df_positive = df_usa[df_usa[COL_CONFIRMED] != 0]
-    fig = get_choropleth_mapbox(geojson=us_counties,
+    fig = get_choropleth_mapbox(name='United States',
+                                geojson=us_counties,
                                 locations=df_positive[COL_FIPS],
                                 z=df_positive[COL_CONFIRMED],
                                 color_boundaries = bvals,
