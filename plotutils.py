@@ -120,6 +120,7 @@ def get_choropleth_mapbox(geojson, locations, z, hovertext,  mapbox_token,
             zmax=zmax,
             marker_line_width=1,
             marker_line_color='white',
+            marker_opacity=0.2,
             text=hovertext,
             hoverinfo='text'))
 
@@ -132,7 +133,7 @@ def get_choropleth_mapbox(geojson, locations, z, hovertext,  mapbox_token,
         mapbox_zoom=2,
         mapbox_center={"lat": 37.0902, "lon": -95.7129}
     )
-    fig.update_layout(margin={"r": 10, "t": 40, "l": 10, "b": 10})
+    fig.update_layout(margin={"r": 0, "t": 0, "l": 0, "b": 0})
     return fig
 
 
