@@ -330,7 +330,6 @@ sidebar = dac.Sidebar(
     skin="dark",
     color="primary",
     brand_color="primary",
-    #url="https://quantee.ai",
     src='./virus.png',
     elevation=5,
     opacity=0.8
