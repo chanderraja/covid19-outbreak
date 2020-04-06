@@ -37,15 +37,29 @@ url_daily = './covid-19-data/csse_covid_19_data/csse_covid_19_daily_reports/04-0
 df = pd.read_csv(url_daily, dtype={COL_FIPS: str})
 
 url_time_series_confirmed = './covid-19-data/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_global.csv'
-df_time_series_confirmed = pd.read_csv(url_time_series_confirmed)
-df_countries_time_series_confirmed = df_time_series_confirmed.drop(columns=['Province/State', COL_LATITUDE, 'Long'])
+df_time_series_deaths = pd.read_csv(url_time_series_confirmed)
+df_countries_time_series_confirmed = df_time_series_deaths.drop(columns=['Province/State', COL_LATITUDE, 'Long'])
 df_countries_time_series_confirmed = df_countries_time_series_confirmed.groupby(df_countries_time_series_confirmed['Country/Region']).aggregate('sum')
 df_countries_time_series_confirmed.rename(
     index={
         'US': 'United States of America',
         'Congo (Brazzaville)': 'Republic of the Congo',
-        'Congo (Kinshasa)': 'Democratic Republic of the Congo'
+        'Congo (Kinshasa)': 'Democratic Republic of the Congo',
+        'Korea, South': 'South Korea'
     }, inplace=True)
+
+url_time_series_deaths = './covid-19-data/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_deaths_global.csv'
+df_time_series_deaths = pd.read_csv(url_time_series_deaths)
+df_countries_time_series_deaths = df_time_series_deaths.drop(columns=['Province/State', COL_LATITUDE, 'Long'])
+df_countries_time_series_deaths = df_countries_time_series_deaths.groupby(df_countries_time_series_deaths['Country/Region']).aggregate('sum')
+df_countries_time_series_deaths.rename(
+    index={
+        'US': 'United States of America',
+        'Congo (Brazzaville)': 'Republic of the Congo',
+        'Congo (Kinshasa)': 'Democratic Republic of the Congo',
+        'Korea, South': 'South Korea'
+    }, inplace=True)
+
 
 df_countries = df.drop(columns=[COL_FIPS, COL_PROVINCE_STATE, COL_ADMIN2, COL_LATITUDE, COL_LONGITUDE, COL_LOC_COMBINED])
 df_countries = df_countries.groupby(df[COL_COUNTRY_REGION]).aggregate(aggregation_functions)
@@ -132,14 +146,34 @@ def get_latlong_and_zoom(location):
             return row[COL_LATITUDE], row[COL_LONGITUDE], zoom
     return DEFAULT_LATITUDE, DEFAULT_LONGITUDE, DEFAULT_ZOOM
 
-def get_time_series_scatter_chart_world():
-    df_world_time_series_confirmed = df_countries_time_series_confirmed.aggregate('sum')
-    x_list = [pd.to_datetime(d).date() for d in df_world_time_series_confirmed.index]
+def get_time_series_scatter_chart_world(df, countries=None):
+    aggregate_sum = df.aggregate('sum')
+    x_list = [pd.to_datetime(d).date() for d in aggregate_sum.index]
     data = []
     data.append(go.Scatter(x=x_list,
-                     y=df_world_time_series_confirmed,
-                     mode='lines'))
-    fig = go.Figure(data=data, layout=dict(title='World Confirmed Outbreaks'))
+                           y=aggregate_sum,
+                           mode='lines',
+                           name='World'))
+    if countries is not None and isinstance(countries, list):
+        for country in countries:
+            if country not in df_countries_time_series_confirmed.index:
+                continue
+            data.append(go.Scatter(x=x_list,
+                               y=df.loc[country,:],
+                               mode='lines',
+                               name=country))
+    layout = go.Layout(
+        plot_bgcolor='rgba(240,240,255,100)',
+        legend=dict(
+            x=0.1,
+            y=0.7,
+            traceorder='normal',
+            font=dict(
+                size=12, ),
+        ),
+    )
+
+    fig = go.Figure(data=data, layout=layout)
     return fig
 
 
@@ -229,35 +263,40 @@ def serve_layout():
                 [
                     get_status_boxes(),
                     dac.SimpleBox(
-                        style={'height': '600px', 'width': '800px'},
-                        title='World',
+                        #style={'height': '600px', 'width': '1200px'},
                         children=[
-                            dcc.Graph(
-                                id='id-mapbox-world',
-                                figure=get_choropleth_mapbox_world(),
-                            ),
-                        ], width=12
+                                dcc.Graph(
+                                    id='id-mapbox-world',
+                                    figure=get_choropleth_mapbox_world(),
+                                ),
+                        ], width=10
                     ),
                     dac.SimpleBox(
-                        style={'height': '600px', 'width': '800px'},
-                        title='World Confirmed',
+                        #style={'height': '600px', 'width': '1200px'},
+                        title='Confirmed cases over time',
                         children=[
+                            dcc.Dropdown(
+                                id='id-dropdown-countries',
+                                options=
+                                    [{'label': i, 'value': i} for i in df_countries_time_series_confirmed.index],
+                                multi=True),
                             dcc.Graph(
-                                id='id-time-series-world',
-                                figure=get_time_series_scatter_chart_world(),
+                                id='id-chart-confirmed-by-date',
+                                figure=get_time_series_scatter_chart_world(
+                                    df_countries_time_series_confirmed,
+                                    ['United States of America', 'China', 'Italy', 'Spain', 'South Korea']),
                             ),
-                        ], width=12
+                        ], width=10
                     ),
                     dac.SimpleBox(
-                        style={'height': '600px', 'width': '800px'},
-                        title='United States',
+                        #style={'height': '600px', 'width': '1200px'},
+                        title='Deaths over time',
                         children=[
                             dcc.Graph(
-                                id='id-mapbox-usa',
-                                figure=get_choropleth_mapbox_us_counties(),
+                                id='id-chart-deaths-by-date',
                             ),
-                        ], width=12
-                    )
+                        ], width=10
+                    ),
                 ],
             ),
         ]
@@ -269,10 +308,14 @@ sidebar = dac.Sidebar(
         dac.SidebarMenu(
             [
                 dac.SidebarHeader(children='Select Outbreak Map'),
-                dcc.Dropdown(
-                    id='id-select-map',
-                    options=[{'label': i, 'value': i} for i in ['World', 'USA']],
-                    value='World'
+                dcc.RadioItems(
+                    id='id-select-scope',
+                    options=[
+                        {'label': 'Worldwide', 'value': 'world'},
+                        {'label': 'USA', 'value': 'usa'},
+                    ],
+                    value='world',
+                    labelStyle={'display': 'block'}
                 ),
                 dac.SidebarMenuItem(id='tab_cards', label='Basic cards', icon='fa-map'),
                 dac.SidebarMenuItem(id='tab_social_cards', label='Social cards', icon='id-card'),
@@ -295,15 +338,17 @@ sidebar = dac.Sidebar(
 
 app.layout = dac.Page([sidebar, serve_layout()])
 
-'''
 @app.callback(
-    Output('id-mapbox-world', 'figure'),
-    [Input('id-input-loc', 'value')]
+    [Output('id-mapbox-world', 'figure'),
+     Output('id-chart-confirmed-by-date', 'figure')],
+    [Input('id-select-scope', 'value'),
+     Input('id-dropdown-countries', 'value')]
 )
-def location_selected(location):
-    lat, long, zoom = get_latlong_and_zoom(location)
-    app.logger.warning(f'location={location}, lat={lat}, long={long}, zoom={zoom}')
-    return get_mapbox(lat, long, zoom)
-'''
+def update_output_div(maploc, countries):
+    map = get_choropleth_mapbox_us_counties() if maploc == 'usa' else get_choropleth_mapbox_world()
+    chart = get_time_series_scatter_chart_world(df_countries_time_series_confirmed, countries)
+    return [map, chart]
+
+
 if __name__ == '__main__':
     app.run_server(debug=True)
