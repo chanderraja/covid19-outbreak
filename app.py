@@ -14,6 +14,23 @@ import json
 from urllib.request import urlopen
 import numpy as np
 from plotutils import get_choropleth_mapbox, discrete_colorscale, interpolated_colors
+from tab_usa import get_tab_content_usa
+from tab_world import get_tab_content_world
+import covid_data
+
+SCOPE_WORLD='world'
+SCOPE_USA='usa'
+
+SCOPE_WORLD_LABEL='Worldwide'
+SCOPE_USA_LABEL='United States'
+
+STAT_CONFIRMED='Confirmed'
+STAT_DEATHS='Deaths'
+STAT_RECOVERED='Recovered'
+STAT_ACTIVE='Active'
+
+
+dataproc = covid_data.CovidDataProcessor()
 
 COL_FIPS='FIPS'
 COL_PROVINCE_STATE='Province_State'
@@ -36,31 +53,6 @@ aggregation_functions = {COL_CONFIRMED: 'sum', COL_DEATHS: 'sum', COL_RECOVERED:
 url_daily = './covid-19-data/csse_covid_19_data/csse_covid_19_daily_reports/04-03-2020.csv'
 df = pd.read_csv(url_daily, dtype={COL_FIPS: str})
 
-url_time_series_confirmed = './covid-19-data/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_global.csv'
-df_time_series_deaths = pd.read_csv(url_time_series_confirmed)
-df_countries_time_series_confirmed = df_time_series_deaths.drop(columns=['Province/State', COL_LATITUDE, 'Long'])
-df_countries_time_series_confirmed = df_countries_time_series_confirmed.groupby(df_countries_time_series_confirmed['Country/Region']).aggregate('sum')
-df_countries_time_series_confirmed.rename(
-    index={
-        'US': 'United States of America',
-        'Congo (Brazzaville)': 'Republic of the Congo',
-        'Congo (Kinshasa)': 'Democratic Republic of the Congo',
-        'Korea, South': 'South Korea'
-    }, inplace=True)
-
-url_time_series_deaths = './covid-19-data/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_deaths_global.csv'
-df_time_series_deaths = pd.read_csv(url_time_series_deaths)
-df_countries_time_series_deaths = df_time_series_deaths.drop(columns=['Province/State', COL_LATITUDE, 'Long'])
-df_countries_time_series_deaths = df_countries_time_series_deaths.groupby(df_countries_time_series_deaths['Country/Region']).aggregate('sum')
-df_countries_time_series_deaths.rename(
-    index={
-        'US': 'United States of America',
-        'Congo (Brazzaville)': 'Republic of the Congo',
-        'Congo (Kinshasa)': 'Democratic Republic of the Congo',
-        'Korea, South': 'South Korea'
-    }, inplace=True)
-
-
 df_countries = df.drop(columns=[COL_FIPS, COL_PROVINCE_STATE, COL_ADMIN2, COL_LATITUDE, COL_LONGITUDE, COL_LOC_COMBINED])
 df_countries = df_countries.groupby(df[COL_COUNTRY_REGION]).aggregate(aggregation_functions)
 df_countries.rename(
@@ -72,10 +64,7 @@ df_countries.rename(
 
 df_world_totals = df_countries.aggregate(aggregation_functions)
 
-#with urlopen('https://raw.githubusercontent.com/plotly/datasets/master/geojson-counties-fips.json') as response:
-#    counties = json.load(response)
-
-with open('us_counties_2010.json') as f:
+with open('./data/us_counties_2010.json') as f:
     us_counties = json.load(f)
     for feat in us_counties['features']:
         state_fips = feat['properties']['STATE']
@@ -83,7 +72,7 @@ with open('us_counties_2010.json') as f:
         feat['id'] = state_fips + county_fips
 
 
-with open('countries.geo.json') as f:
+with open('./data/countries.geo.json') as f:
     countries = json.load(f)
 
 
@@ -146,22 +135,22 @@ def get_latlong_and_zoom(location):
             return row[COL_LATITUDE], row[COL_LONGITUDE], zoom
     return DEFAULT_LATITUDE, DEFAULT_LONGITUDE, DEFAULT_ZOOM
 
-def get_time_series_scatter_chart_world(df, countries=None):
+def get_time_series_scatter_chart(df, locations=None):
     aggregate_sum = df.aggregate('sum')
     x_list = [pd.to_datetime(d).date() for d in aggregate_sum.index]
     data = []
     data.append(go.Scatter(x=x_list,
                            y=aggregate_sum,
-                           mode='lines',
-                           name='World'))
-    if countries is not None and isinstance(countries, list):
-        for country in countries:
-            if country not in df_countries_time_series_confirmed.index:
+                           mode='lines'))
+    if locations is not None and isinstance(locations, list):
+        for loc in locations:
+            if loc not in df.index:
+                app.logger.warning(f'Invalid location {loc} passed, skipping....')
                 continue
             data.append(go.Scatter(x=x_list,
-                               y=df.loc[country,:],
+                               y=df.loc[loc,:],
                                mode='lines',
-                               name=country))
+                               name=loc))
     layout = go.Layout(
         plot_bgcolor='rgba(240,240,255,100)',
         legend=dict(
@@ -252,7 +241,7 @@ def get_status_boxes():
             icon='ambulance',
             width=3
         ),
-    ], className='row')
+    ]) #, className='row')
 
 
 def serve_layout():
@@ -276,15 +265,26 @@ def serve_layout():
                         title='Confirmed cases over time',
                         children=[
                             dcc.Dropdown(
-                                id='id-dropdown-countries',
-                                options=
-                                    [{'label': i, 'value': i} for i in df_countries_time_series_confirmed.index],
-                                multi=True),
+                                id='id-dropdown-locations',
+                                multi=True,
+                                persistence=True,
+                                persistence_type='local'
+                            ),
+                            html.Br(),
+                            dcc.RadioItems(
+                                id='id-select-case-type',
+                                options=[
+                                    {'label': STAT_CONFIRMED, 'value': STAT_CONFIRMED},
+                                    {'label': STAT_DEATHS, 'value': STAT_DEATHS},
+                                ],
+                                value='Confirmed',
+                                labelStyle={'display': 'inline-block'},
+                                persistence=True,
+                                persistence_type='local'
+                            ),
+                            html.Br(),
                             dcc.Graph(
-                                id='id-chart-confirmed-by-date',
-                                figure=get_time_series_scatter_chart_world(
-                                    df_countries_time_series_confirmed,
-                                    ['United States of America', 'China', 'Italy', 'Spain', 'South Korea']),
+                                id='id-chart-cases-by-date'
                             ),
                         ], width=10
                     ),
@@ -302,51 +302,86 @@ def serve_layout():
         ]
     )
 
-
+body = dac.Body(
+    dac.TabItems([
+        get_tab_content_world(dataproc),
+        get_tab_content_usa(dataproc)
+    ])
+)
 sidebar = dac.Sidebar(
     [
         dac.SidebarMenu(
             [
-                dac.SidebarHeader(children='Select Outbreak Map'),
-                dcc.RadioItems(
-                    id='id-select-scope',
-                    options=[
-                        {'label': 'Worldwide', 'value': 'world'},
-                        {'label': 'USA', 'value': 'usa'},
-                    ],
-                    value='world',
-                    labelStyle={'display': 'block'}
-                ),
-                dac.SidebarMenuItem(id='tab_cards', label='Basic cards', icon='fa-map'),
-                dac.SidebarMenuItem(id='tab_social_cards', label='Social cards', icon='id-card'),
-                dac.SidebarMenuItem(id='tab_tab_cards', label='Tab cards', icon='image'),
-                dac.SidebarHeader(children="Boxes"),
-                dac.SidebarMenuItem(id='tab_basic_boxes', label='Basic boxes', icon='desktop'),
-                dac.SidebarMenuItem(id='tab_value_boxes', label='Value/Info boxes', icon='suitcase'),
+                dac.SidebarHeader(children='Select Outbreak Scope'),
+                dac.SidebarMenuItem(id='id-tab-world', label='Worldwide', icon=''),
+                dac.SidebarMenuItem(id='id-tab-usa', label='United States', icon=''),
             ]
         ),
     ],
     title='Dashboard',
-    skin="dark",
-    color="primary",
-    brand_color="primary",
-    src='./virus.png',
+    skin='light',
+    color='primary',
+    brand_color='primary',
+    src='./assets/virus.png',
     elevation=5,
     opacity=0.8
 )
 
-app.layout = dac.Page([sidebar, serve_layout()])
+app.layout = dac.Page([sidebar, body])
 
+
+# =============================================================================
+# Callbacks
+# =============================================================================
+def activate(input_id, n_tab_world, n_tab_usa):
+    # Depending on tab which triggered a callback, show/hide contents of app
+    if input_id == 'id-tab-world' and n_tab_world:
+        return True, False
+    elif input_id == 'id-tab-usa' and n_tab_usa:
+        return False, True
+    else:
+        return True, False
+
+
+@app.callback([Output('id-tab-content-world', 'active'),
+               Output('id-tab-content-usa', 'active')],
+              [Input('id-tab-world', 'n_clicks'),
+               Input('id-tab-usa', 'n_clicks')]
+              )
+def display_tab(n_tab_world, n_tab_usa):
+    ctx = dash.callback_context  # Callback context to recognize which input has been triggered
+
+    # Get id of input which triggered callback
+    if not ctx.triggered:
+        raise PreventUpdate
+    else:
+        input_id = ctx.triggered[0]['prop_id'].split('.')[0]
+
+    return activate(input_id, n_tab_world, n_tab_usa)
+
+'''
 @app.callback(
     [Output('id-mapbox-world', 'figure'),
-     Output('id-chart-confirmed-by-date', 'figure')],
-    [Input('id-select-scope', 'value'),
-     Input('id-dropdown-countries', 'value')]
+     Output('id-dropdown-locations', 'options'),
+     Output('id-dropdown-locations', 'value'),
+     Output('id-chart-cases-by-date', 'figure')],
+    [Input('id-select-scope', 'value')]
 )
-def update_output_div(maploc, countries):
-    map = get_choropleth_mapbox_us_counties() if maploc == 'usa' else get_choropleth_mapbox_world()
-    chart = get_time_series_scatter_chart_world(df_countries_time_series_confirmed, countries)
-    return [map, chart]
+'''
+def update_output_div(scope):
+    if scope == SCOPE_WORLD:
+        df = dataproc.get_df_confirmed_by_date_world()
+        options = [{'label': x, 'value': x} for x in df.index]
+        value = df.index[0]
+        map = get_choropleth_mapbox_world()
+        chart = get_time_series_scatter_chart(df)
+    else:
+        df = dataproc.get_df_confirmed_by_date_usa()
+        options = [{'label': x, 'value': x} for x in df.index]
+        value = df.index[0]
+        map = get_choropleth_mapbox_us_counties()
+        chart = get_time_series_scatter_chart(df)
+    return [map, options, value, chart]
 
 
 if __name__ == '__main__':
