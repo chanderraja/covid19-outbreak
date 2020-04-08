@@ -120,7 +120,7 @@ def get_choropleth_mapbox(geojson, locations, z, hovertext,  mapbox_token,
             zmax=zmax,
             marker_line_width=1,
             marker_line_color='white',
-            marker_opacity=0.2,
+            marker_opacity=0.8,
             text=hovertext,
             hoverinfo='text'))
 

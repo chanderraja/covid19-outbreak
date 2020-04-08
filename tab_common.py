@@ -29,7 +29,7 @@ def get_status_boxes(confirmed, deaths, recovered, active):
         ),
         dac.InfoBox(
             value=f'{active:,}',
-            title='Acctive',
+            title='Active',
             color='warning',
             icon='ambulance',
             width=3
@@ -45,7 +45,7 @@ def get_mapbox(id, title, scope):
             dcc.Graph(
                 id=id,
                 config=dict(displayModeBar=False),
-                style={'width': '90vw'}
+                style={'width': '90vw'},
                 figure=get_choropleth_mapbox()
             )
         ],
