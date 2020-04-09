@@ -70,7 +70,8 @@ class CovidDataProcessor:
     __csse_timeseries_url = __csse_base_url + 'csse_covid_19_time_series/'
 
     __geojson_world_countries_url = './data/countries.geo.json'
-    __geojson_us_counties_url = './data/us_counties_2010.json'
+    __geojson_us_states_url = './data/us_states_500k_res.json'
+    __geojson_us_counties_url = './data/us_counties_500k_res.json'
 
     rename_countries = {
         'Bahamas': 'The Bahamas',
@@ -122,6 +123,10 @@ class CovidDataProcessor:
                 state_fips = feat['properties']['STATE']
                 county_fips = feat['properties']['COUNTY']
                 feat['id'] = state_fips + county_fips
+
+    def __read_us_states_geojson(self):
+        with open(self.__geojson_us_states_url) as f:
+            self.geojson_us_states = json.load(f)
 
     def __check_countries_in_province_field(self, df):
         geojson = self.geojson_world_countries
@@ -283,22 +288,24 @@ class CovidDataProcessor:
     def __init__(self, *args, **kwargs):
         self.__init_logger()
         self.__read_world_countries_geojson()
+        self.__read_us_states_geojson()
         self.__read_us_counties_geojson()
         self.__read_csse_daily_report()
         self.__read_csse_time_series_reports()
         pass
 
-    def get_geojson_world_countries(self):
+    def get_geojson(self, scope):
         """
-        :return: parsed geoJSON of world countries as a dict
+        :return: parsed geoJSON based on scope
         """
-        return self.geojson_world_countries
-
-    def get_geojson_us_counties(self):
-        """
-        :return: parsed geoJSON of US counties as a dict
-        """
-        return self.geojson_us_counties
+        if scope == SCOPE_WORLD:
+            return self.geojson_world_countries
+        elif scope == SCOPE_USA:
+            return self.geojson_us_states
+        elif scope == SCOPE_US_COUNTIES:
+            return self.geojson_us_counties
+        else:
+            return None
 
     def get_total_confirmed(self, scope):
         """

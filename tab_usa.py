@@ -11,19 +11,20 @@ from plotutils import get_choropleth_mapbox
 
 def get_choropleth_mapbox_usa(dataproc: CovidDataProcessor, logger):
     mapbox_access_token = os.environ.get('MAPBOX_TOKEN')
-    geojson = dataproc.get_geojson_us_counties()
-    df = dataproc.get_df_daily_report(scope=SCOPE_US_COUNTIES)
+    geojson = dataproc.get_geojson(scope=SCOPE_USA)
+    df = dataproc.get_df_daily_report(scope=SCOPE_USA)
     bvals = [1, 10, 100, 1000, 10000, 100000, 1000000]
     df_positive = df[df[CSSE_DAILY_COL_CONFIRMED] != 0]
     fig = get_choropleth_mapbox(geojson=geojson,
-                                locations=df_positive[CSSE_DAILY_COL_FIPS],
+                                locations=df_positive.index,
                                 z=df_positive[CSSE_DAILY_COL_CONFIRMED],
                                 color_boundaries = bvals,
                                 color_min = '#ffff00',
                                 color_max = '#8b0000',
                                 hovertext=df_positive[CSSE_DAILY_COL_HOVERTEXT],
                                 mapbox_token=mapbox_access_token,
-                                logarithmic = True)
+                                logarithmic = True,
+                                featureid_key='properties.NAME')
     return fig
 
 
@@ -85,7 +86,7 @@ def get_tab_content_usa(data: CovidDataProcessor, logger):
                                 dcc.Graph(
                                     id='id-chart-usa',
                                     config=dict(displayModeBar=False),
-                                  style={'width': '75vw'}
+                                    style={'width': '75vw'}
                                 )
                             ]
                         )

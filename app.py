@@ -23,9 +23,9 @@ STAT_ACTIVE='Active'
 
 dataproc = covid_data.CovidDataProcessor()
 
-external_stylesheets = [dbc.themes.DARKLY]
+external_stylesheets = [dbc.themes.BOOTSTRAP]
 mapbox_access_token = os.environ.get('MAPBOX_TOKEN')
-app = dash.Dash(__name__)
+app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
 server = app.server
 
 '''
@@ -88,149 +88,6 @@ def get_time_series_scatter_chart(df, locations=None):
 
     fig = go.Figure(data=data, layout=layout)
     return fig
-
-'''
-def get_choropleth_mapbox_world():
-    geojson = dataproc.get_geojson_world_countries()
-    df = dataproc.get_df_daily_report(scope=SCOPE_WORLD)
-    locations = []
-    cases = []
-    text = []
-    for feat in geojson['features']:
-        country = feat['properties']['name']
-        if country not in df.index:
-            app.logger.warning(f'{country} not found in dataset')
-            continue
-        row = df.loc[country]
-        if row[CSSE_DAILY_COL_CONFIRMED] != 0:
-            locations.append(country)
-            cases.append(row[CSSE_DAILY_COL_CONFIRMED])
-            text.append(row[CSSE_DAILY_COL_HOVERTEXT])
-
-    featureid_key = 'properties.name'
-    bvals = [1, 10, 100, 1000, 10000, 100000, 1000000, 10000000]
-
-    fig = get_choropleth_mapbox(geojson=dataproc.get_geojson_world_countries(),
-                                locations=locations,
-                                z=cases,
-                                color_boundaries = bvals,
-                                color_min = '#ffff3F',
-                                color_max = '#8b0000',
-                                hovertext=text,
-                                mapbox_token=mapbox_access_token,
-                                logarithmic=True,
-                                featureid_key=featureid_key)
-    return fig
-
-
-def get_choropleth_mapbox_us_counties():
-    bvals = [1, 10, 100, 1000, 10000, 100000]
-    df_positive = df_usa[df_usa[COL_CONFIRMED] != 0]
-    fig = get_choropleth_mapbox(geojson=dataproc.get_geojson_us_counties(),
-                                locations=df_positive[COL_FIPS],
-                                z=df_positive[COL_CONFIRMED],
-                                color_boundaries = bvals,
-                                color_min = '#ffff00',
-                                color_max = '#8b0000',
-                                hovertext=df_positive[COL_HOVERTEXT],
-                                mapbox_token=mapbox_access_token,
-                                logarithmic = True)
-    return fig
-
-
-def get_status_boxes():
-    return html.Div([
-        dac.InfoBox(
-            value=f'{df_world_totals[COL_CONFIRMED]:,}',
-            title='Confirmed',
-            color='info',
-            icon='hospital',
-            width=3
-        ),
-        dac.InfoBox(
-            elevation=4,
-            value=f'{df_world_totals[COL_DEATHS]:,}',
-            title='Deaths',
-            color='danger',
-            icon='ribbon',
-            width=3
-        ),
-        dac.InfoBox(
-            value=f'{df_world_totals[COL_RECOVERED]:,}',
-            title='Recovered',
-            color='success',
-            icon='running',
-            width=3
-        ),
-        dac.InfoBox(
-            value=f'{df_world_totals[COL_ACTIVE]:,}',
-            title='Active',
-            color='warning',
-            icon='ambulance',
-            width=3
-        ),
-    ]) #, className='row')
-
-
-def serve_layout():
-    return dac.TabItem(
-        id='content_value_boxes',
-        children=[
-            dac.Body(
-                [
-                    get_status_boxes(),
-                    dac.SimpleBox(
-                        #style={'height': '600px', 'width': '1200px'},
-                        children=[
-                                dcc.Graph(
-                                    id='id-mapbox-world',
-                                    figure=get_choropleth_mapbox_world(),
-                                ),
-                        ], width=10
-                    ),
-                    dac.SimpleBox(
-                        #style={'height': '600px', 'width': '1200px'},
-                        title='Confirmed cases over time',
-                        children=[
-                            dcc.Dropdown(
-                                id='id-dropdown-locations',
-                                multi=True,
-                                persistence=True,
-                                persistence_type='local'
-                            ),
-                            html.Br(),
-                            dcc.RadioItems(
-                                id='id-select-case-type',
-                                options=[
-                                    {'label': STAT_CONFIRMED, 'value': STAT_CONFIRMED},
-                                    {'label': STAT_DEATHS, 'value': STAT_DEATHS},
-                                ],
-                                value='Confirmed',
-                                labelStyle={'display': 'inline-block'},
-                                persistence=True,
-                                persistence_type='local'
-                            ),
-                            html.Br(),
-                            dcc.Graph(
-                                id='id-chart-cases-by-date'
-                            ),
-                        ], width=10
-                    ),
-                    dac.SimpleBox(
-                        #style={'height': '600px', 'width': '1200px'},
-                        title='Deaths over time',
-                        children=[
-                            dcc.Graph(
-                                id='id-chart-deaths-by-date',
-                            ),
-                        ], width=10
-                    ),
-                ],
-            ),
-        ]
-    )
-    
-'''
 
 body = dac.Body(
     dac.TabItems([
