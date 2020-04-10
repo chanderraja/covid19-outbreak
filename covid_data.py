@@ -4,10 +4,20 @@ import os
 import logging
 import json
 
+# Scope
 SCOPE_WORLD='Worldwide'         # worldwide scope indexed by countries
 SCOPE_USA='United States'       # US scope indexed by states
 SCOPE_US_COUNTIES='US Counties' # US scope indexed by counties
 
+# Stats
+STAT_CONFIRMED='Confirmed'
+STAT_DEATHS='Deaths'
+STAT_RECOVERED='Recovered'
+STAT_ACTIVE='Active'
+
+# Data frame columns
+
+# Daily DF columns
 CSSE_DAILY_COL_FIPS='FIPS'
 CSSE_DAILY_COL_PROVINCE_STATE='Province_State'
 CSSE_DAILY_COL_COUNTRY_REGION='Country_Region'
@@ -102,6 +112,15 @@ class CovidDataProcessor:
         CSSE_DAILY_COL_LAST_UPDATE: 'max'
     }
 
+    csse_daily_stat_to_col_map = {
+        STAT_CONFIRMED: CSSE_DAILY_COL_CONFIRMED,
+        STAT_DEATHS: CSSE_DAILY_COL_DEATHS,
+        STAT_ACTIVE: CSSE_DAILY_COL_ACTIVE,
+        STAT_RECOVERED: CSSE_DAILY_COL_RECOVERED
+    }
+
+    scope_to_totals_map = {}
+
     def __init_logger(self):
         self.logger = logging.getLogger(self.__class__.__name__)
         ch = logging.StreamHandler()
@@ -166,6 +185,7 @@ class CovidDataProcessor:
         # compute global totals
         self.logger.info('computing global daily totals...')
         self.global_totals = self.df_daily_world.aggregate(self.daily_aggregation_functions)
+        self.scope_to_totals_map[SCOPE_WORLD] = self.global_totals
 
         # make a US counties dataframe
         self.logger.info('Deriving data for US counties...')
@@ -185,6 +205,8 @@ class CovidDataProcessor:
         # compute us totals
         self.logger.info('computing US daily totals...')
         self.usa_totals = self.df_daily_us_counties.aggregate(self.daily_aggregation_functions)
+        self.scope_to_totals_map[SCOPE_USA] = self.usa_totals
+        self.scope_to_totals_map[SCOPE_US_COUNTIES] = self.usa_totals
 
     def __get_csse_time_series_data(self, url, sum_index='Total', dropcolumns_func=None, aggregate_func=None, logtext=None, rename_countries=False):
         if logtext is not None:
@@ -307,37 +329,20 @@ class CovidDataProcessor:
         else:
             return None
 
-    def get_total_confirmed(self, scope):
+    def get_total_stat(self, scope, stat):
         """
-        :param scope: SCOPE_WORLD or SCOPE_USA
-        :return: total current tally of positive cases
+        :param scope: SCOPE_WORLD or other defined scope
+        :return: total current tally of requested stat (e.g. confirmed, deaths etc)
         """
-        return self.global_totals.get(CSSE_DAILY_COL_CONFIRMED) if scope == SCOPE_WORLD else \
-                self.usa_totals.get(CSSE_DAILY_COL_CONFIRMED)
-
-    def get_total_deaths(self, scope):
-        """
-        :param scope: SCOPE_WORLD or SCOPE_USA
-        :return: total current tally of deaths
-        """
-        return self.global_totals.get(CSSE_DAILY_COL_DEATHS) if scope == SCOPE_WORLD else \
-                self.usa_totals.get(CSSE_DAILY_COL_DEATHS)
-
-    def get_total_recovered(self, scope):
-        """
-        :param scope: SCOPE_WORLD or SCOPE_USA
-        :return: total current tally of recovered cases
-        """
-        return self.global_totals.get(CSSE_DAILY_COL_RECOVERED) if scope == SCOPE_WORLD else \
-                self.usa_totals.get(CSSE_DAILY_COL_RECOVERED)
-
-    def get_total_active(self, scope):
-        """
-        :param scope: SCOPE_WORLD or SCOPE_USA
-        :return: total current tally of active cases
-        """
-        return self.global_totals.get(CSSE_DAILY_COL_ACTIVE) if scope == SCOPE_WORLD else \
-                self.usa_totals.get(CSSE_DAILY_COL_ACTIVE)
+        if stat not in self.csse_daily_stat_to_col_map:
+            self.logger.error(f'Invalid stat {stat} passed')
+            return None
+        column = self.csse_daily_stat_to_col_map[stat]
+        if scope not in self.scope_to_totals_map:
+            self.logger.error(f'Invalid scope {scope} passed')
+            return None
+        totals = self.scope_to_totals_map[scope]
+        return totals.get(column)
 
 
     def get_df_confirmed_by_date_world(self):

@@ -54,7 +54,7 @@ def get_mapbox(id, title, scope):
         ],
     ),
 
-def get_time_series_scatter_chart(df, locations=None, logger=None):
+def get_time_series_scatter_chart(df, locations=None, title=None, logger=None):
     x_list = [pd.to_datetime(d).date() for d in df.columns]
     data = []
     if locations is not None and isinstance(locations, list):
@@ -66,6 +66,7 @@ def get_time_series_scatter_chart(df, locations=None, logger=None):
                                mode='lines',
                                name=loc))
     layout = go.Layout(
+        title=title,
         plot_bgcolor='rgba(240,240,255,100)',
         legend=dict(
             x=0.05,
