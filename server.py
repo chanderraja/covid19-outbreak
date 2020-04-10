@@ -1,4 +1,4 @@
 from waitress import serve
-from app import server
+from dbc_app import server
 
 serve(server)

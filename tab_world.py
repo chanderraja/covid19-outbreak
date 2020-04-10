@@ -30,7 +30,7 @@ def get_choropleth_mapbox_world(dataproc: CovidDataProcessor, logger):
     featureid_key = 'properties.name'
     bvals = [1, 10, 100, 1000, 10000, 100000, 1000000, 10000000]
 
-    fig = get_choropleth_mapbox(geojson=dataproc.get_geojson(),
+    fig = get_choropleth_mapbox(geojson=dataproc.get_geojson(scope=SCOPE_WORLD),
                                 locations=locations,
                                 z=cases,
                                 color_boundaries = bvals,
@@ -74,7 +74,6 @@ def get_tab_content_world(data: CovidDataProcessor, logger=None):
                         dac.SimpleBox(
                             style={'height': "600px"},
                             width=12,
-                            title="Box 2",
                             children=[
                                 html.Div(
                                     [

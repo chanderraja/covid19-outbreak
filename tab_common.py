@@ -1,7 +1,10 @@
+import pandas as pd
+import plotly.graph_objects as go
 import dash_html_components as html
 import dash_admin_components as dac
 import dash_core_components as dcc
 from plotutils import get_choropleth_mapbox
+from covid_data import CSSE_DAILY_COL_CONFIRMED
 
 def get_status_boxes(confirmed, deaths, recovered, active):
     return html.Div([
@@ -51,3 +54,27 @@ def get_mapbox(id, title, scope):
         ],
     ),
 
+def get_time_series_scatter_chart(df, locations=None, logger=None):
+    x_list = [pd.to_datetime(d).date() for d in df.columns]
+    data = []
+    if locations is not None and isinstance(locations, list):
+        for loc in locations:
+            if loc not in df.index:
+                continue
+            data.append(go.Scatter(x=x_list,
+                               y=df.loc[loc,:],
+                               mode='lines',
+                               name=loc))
+    layout = go.Layout(
+        plot_bgcolor='rgba(240,240,255,100)',
+        legend=dict(
+            x=0.1,
+            y=0.7,
+            traceorder='normal',
+            font=dict(
+                size=12, ),
+        ),
+    )
+
+    fig = go.Figure(data=data, layout=layout)
+    return fig
