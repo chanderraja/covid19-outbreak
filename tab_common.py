@@ -68,11 +68,12 @@ def get_time_series_scatter_chart(df, locations=None, logger=None):
     layout = go.Layout(
         plot_bgcolor='rgba(240,240,255,100)',
         legend=dict(
-            x=0.1,
-            y=0.7,
+            x=0.05,
+            y=0.95,
             traceorder='normal',
             font=dict(
-                size=12, ),
+                size=10,
+            ),
         ),
     )
 

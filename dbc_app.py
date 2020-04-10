@@ -16,13 +16,7 @@ server = app.server
 
 dataproc = CovidDataProcessor()
 
-graph = dcc.Graph(
-            id='id-outbreak-graph',
-            figure=get_time_series_scatter_chart(dataproc.get_df_confirmed_by_date_world(),
-                                                 locations=['United States of America', 'China'])
-)
-
-def get_location_dropdown_options():
+def get_location_options():
     df = dataproc.get_df_confirmed_by_date_world()
     options = [{'label': i, 'value': i} for i in df.index]
     return options
@@ -30,18 +24,6 @@ def get_location_dropdown_options():
 def get_chart(df):
     controls = dbc.Card(
         [
-            dbc.FormGroup(
-                [
-                    dbc.Label('Select locations to compare'),
-                    dcc.Dropdown(
-                        id='id-loc-dropdown',
-                        options=get_location_dropdown_options(),
-                        value=['United States of America', 'Italy'],
-                        multi=True
-                    ),
-                    graph
-                ]
-            ),
             dbc.FormGroup(
                 [
                     dbc.Label('Select statistic to plot'),
@@ -70,6 +52,31 @@ map = dcc.Graph(
     responsive=True,
 )
 
+def get_location_selector():
+    return dbc.Card(
+        dbc.FormGroup(
+            [
+                dbc.Label('Select up to 5 locations to compare'),
+                dcc.Dropdown(
+                    id='id-loc-dropdown',
+                    options=get_location_options(),
+                    value=['Worldwide'],
+                    multi=True
+                ),
+            ]
+        ),
+    )
+
+def get_outbreak_chart(title, id):
+    return dbc.Card(
+        [
+            html.H4(title),
+            dcc.Graph(id=id, responsive=False)
+        ]
+    )
+
+
+
 def serve_layout():
     layout = dbc.Container(
         [
@@ -80,11 +87,29 @@ def serve_layout():
                     dbc.Row(
                         [
                             dbc.Col(
-                                get_chart(dataproc.get_df_daily_report(scope=SCOPE_WORLD)),
-                                lg=8,
+                                [get_location_selector()],
+                                sm=12,
+                                md=8,
+                                lg=6,
                             ),
                         ],
                         align='center'
+                    ),
+                    dbc.Row(
+                        [
+                            dbc.Col(
+                                [get_outbreak_chart('Confirmed', 'id-timechart-confirmed')],
+                                sm=12,
+                                md=6,
+                                lg=6,
+                            ),
+                            dbc.Col(
+                                [get_outbreak_chart('Deaths', 'id-timechart-deaths')],
+                                sm=12,
+                                md=6,
+                                lg=6,
+                            ),
+                        ]
                     ),
                     dbc.Row(
                         [
@@ -106,16 +131,19 @@ def serve_layout():
 app.layout = serve_layout
 
 def process_time_graph(locations):
-    chart = get_time_series_scatter_chart(dataproc.get_df_confirmed_by_date_world(),
+    chart_confirmed = get_time_series_scatter_chart(dataproc.get_df_confirmed_by_date_world(),
                                                 locations=locations)
-    options = get_location_dropdown_options()
+    chart_deaths = get_time_series_scatter_chart(dataproc.get_df_deaths_by_date_world(),
+                                                locations=locations)
+    options = get_location_options()
     if len(locations) == 5:
         options = [x for x in options if x['value'] in locations]
-    return [chart, options]
+    return [chart_confirmed, chart_deaths, options]
 
 
 # functionality is the same for both dropdowns, so we reuse filter_options
-app.callback([Output('id-outbreak-graph', 'figure'),
+app.callback([Output('id-timechart-confirmed', 'figure'),
+              Output('id-timechart-deaths', 'figure'),
               Output('id-loc-dropdown', 'options')],
              [Input('id-loc-dropdown', 'value')])(
     process_time_graph
