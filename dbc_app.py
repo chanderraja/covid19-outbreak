@@ -25,21 +25,26 @@ map = dcc.Graph(
 )
 
 def get_location_options():
-    df = dataproc.get_df_confirmed_by_date_world()
+    df = dataproc.get_stat_by_date_df(SCOPE_WORLD, STAT_CONFIRMED)
     options = [{'label': i, 'value': i} for i in df.index]
     return options
 
 def get_location_selector():
-    return dbc.FormGroup(
+    return dbc.Collapse(
         [
-            dbc.Label('Select up to 5 locations to compare'),
-            dcc.Dropdown(
-                id='id-loc-dropdown',
-                options=get_location_options(),
-                value=['Worldwide'],
-                multi=True
-            ),
-        ]
+            dbc.FormGroup(
+                [
+                    dbc.Label('Select up to 5 locations to compare'),
+                    dcc.Dropdown(
+                        id='id-loc-dropdown',
+                        options=get_location_options(),
+                        value=['Worldwide'],
+                        multi=True
+                    ),
+                ]
+            )
+        ],
+        id='id-collapse-loc'
     )
 
 
@@ -88,32 +93,40 @@ def get_stat_card(scope, stat):
         )
     )
 
+def get_stat_charts_ui():
+    ui =    \
+    [
+        dbc.Row([dbc.Col(get_location_selector(), md=8)],
+            align='center',
+            justify='left'
+        )
+    ]
+
+    ui += \
+    [
+        dbc.Row(dbc.Col(get_stat_card(SCOPE_WORLD, x), md=8), justify='left') for x in supported_stats
+    ]
+    return ui
 
 def serve_layout():
     layout = dbc.Container(
         [
             html.H1("My Dashboard"),
             html.Hr(),
-            dbc.Row([dbc.Col(get_stat_card(SCOPE_WORLD, x), sm=12, md=4, lg=4) for x in supported_stats], justify='center'),
             dbc.Row(
                 [
+                    dbc.Col(get_stat_charts_ui(), md=6),
                     dbc.Col(
-                        [get_location_selector()],
-                        sm=9,
-                        md=9,
-                        lg=9,
-                    ),
-                ],
-                align='center',
-                justify='center'
-            ),
-            dbc.Card(
-                [
-                    dbc.CardBody(
-                        [
-                        ]
-                    ),
-                ],
+                        dbc.Card(
+                            [
+                                dbc.CardHeader(html.H2('Header')),
+                                dbc.CardBody(),
+                                dbc.CardFooter('Footer'),
+                            ]
+                        ),
+                        md=6
+                    )
+                ]
             ),
             dbc.Card(
                 [
@@ -141,34 +154,51 @@ def serve_layout():
 
 app.layout = serve_layout
 
-def process_time_graph(locations):
-    chart_confirmed = get_time_series_scatter_chart(dataproc.get_df_confirmed_by_date_world(),
-                                                locations=locations)
-    chart_deaths = get_time_series_scatter_chart(dataproc.get_df_deaths_by_date_world(),
-                                                locations=locations)
-    chart_recovered = get_time_series_scatter_chart(dataproc.get_df_recovered_by_date_world(),
-                                                locations=locations)
+
+def toggle_collapse_1(*args):
+    num_stats = len(supported_stats)
+    button_clicks = [args[x] for x in range(num_stats)]
+    ctx = dash.callback_context
+    if not ctx.triggered or not any(button_clicks):
+        raise PreventUpdate
+    else:
+        input_id = ctx.triggered[0]['prop_id'].split('.')[0]
+    button_collapse_opens = [args[x] for x in range(num_stats, 2 *num_stats)]
+    loc_collapse_open = False
+    for i in range(num_stats):
+        if input_id == get_stat_button_id(supported_stats[i]):
+             button_collapse_opens[i] = not button_collapse_opens[i]
+    if any(button_collapse_opens):
+        loc_collapse_open = True
+    return button_collapse_opens + [loc_collapse_open]
+
+
+def register_stat_collapse_callback():
+    outputs = [Output(get_stat_collapse_id(s), 'is_open') for s in supported_stats]
+    outputs.append(Output('id-collapse-loc', 'is_open'))
+    inputs = [Input(get_stat_button_id(s), 'n_clicks') for s in supported_stats]
+    states = [State(get_stat_collapse_id(s), 'is_open') for s in supported_stats]
+    app.callback(outputs, inputs, states)(toggle_collapse_1)
+
+register_stat_collapse_callback()
+
+def process_by_date_charts(locations):
+    charts = [get_time_series_scatter_chart(dataproc.get_stat_by_date_df(SCOPE_WORLD, stat), locations)
+                                            for stat in supported_stats]
     options = get_location_options()
     if len(locations) == 5:
         options = [x for x in options if x['value'] in locations]
-    return [chart_confirmed, chart_deaths, chart_recovered, options]
+    return charts + [options]
 
-def toggle_collapse(n, is_open):
-    if n:
-        return not is_open
-    return is_open
+def register_by_date_charts_callback():
+    outputs = [Output(get_stat_chart_id(s), 'figure') for s in supported_stats]
+    outputs.append(Output('id-loc-dropdown', 'options'))
+    inputs = [Input('id-loc-dropdown', 'value')]
+    app.callback(outputs, inputs)(process_by_date_charts)
 
-def register_stat_collapse_callback(stat):
-    collapse_id = get_stat_collapse_id(stat)
-    button_id = get_stat_button_id(stat)
-    output = Output(collapse_id, 'is_open')
-    inputs = [Input(button_id, 'n_clicks')]
-    states = [State(collapse_id, 'is_open')]
-    app.callback(output, inputs, states)(toggle_collapse)
+register_by_date_charts_callback()
 
-for s in supported_stats:
-    register_stat_collapse_callback(s)
-
+'''
 # functionality is the same for both dropdowns, so we reuse filter_options
 app.callback(
     [Output('id-chart-confirmed', 'figure'),
@@ -178,7 +208,7 @@ app.callback(
     [Input('id-loc-dropdown', 'value')])(
     process_time_graph
 )
-
+'''
 
 if __name__ == '__main__':
     app.run_server(debug=False, port=8888)

@@ -121,6 +121,14 @@ class CovidDataProcessor:
 
     scope_to_totals_map = {}
 
+    scope_and_stat_to_by_date_df_map = {
+        SCOPE_WORLD: {},
+        SCOPE_USA: {},
+        SCOPE_US_COUNTIES: {}
+    }
+
+
+
     def __init_logger(self):
         self.logger = logging.getLogger(self.__class__.__name__)
         ch = logging.StreamHandler()
@@ -250,6 +258,9 @@ class CovidDataProcessor:
                 rename_countries=True,
                 sum_index='Worldwide'
             )
+
+        self.scope_and_stat_to_by_date_df_map[SCOPE_WORLD][STAT_CONFIRMED] = self.df_confirmed_by_date_world
+
         self.df_deaths_by_date_world, self.deaths_totals_global = \
             self.__get_csse_time_series_data(
                 url=csse_timeseries_deaths_global_csv,
@@ -259,6 +270,9 @@ class CovidDataProcessor:
                 rename_countries=True,
                 sum_index = 'Worldwide'
         )
+
+        self.scope_and_stat_to_by_date_df_map[SCOPE_WORLD][STAT_DEATHS] = self.df_deaths_by_date_world
+
         self.df_recovered_by_date_world, self.recovered_totals_global = \
             self.__get_csse_time_series_data(
                 url=csse_timeseries_recovered_global_csv,
@@ -268,6 +282,8 @@ class CovidDataProcessor:
                 rename_countries=True,
                 sum_index = 'Worldwide'
         )
+
+        self.scope_and_stat_to_by_date_df_map[SCOPE_WORLD][STAT_RECOVERED] = self.df_recovered_by_date_world
 
 
         csse_timeseries_confirmed_usa_csv = self.__csse_timeseries_url + 'time_series_covid19_confirmed_US.csv'
@@ -297,6 +313,8 @@ class CovidDataProcessor:
                 sum_index = 'US Total'
         )
 
+        self.scope_and_stat_to_by_date_df_map[SCOPE_USA][STAT_CONFIRMED] = self.df_confirmed_by_date_usa
+
         self.df_deaths_by_date_usa, self.deaths_totals_usa = \
             self.__get_csse_time_series_data(
                 url=csse_timeseries_deaths_usa_csv,
@@ -305,6 +323,8 @@ class CovidDataProcessor:
                 logtext='global time series confirmed cases',
                 sum_index = 'US Total'
             )
+
+        self.scope_and_stat_to_by_date_df_map[SCOPE_USA][STAT_DEATHS] = self.df_deaths_by_date_usa
 
 
     def __init__(self, *args, **kwargs):
@@ -332,6 +352,7 @@ class CovidDataProcessor:
     def get_total_stat(self, scope, stat):
         """
         :param scope: SCOPE_WORLD or other defined scope
+        :param stat: stat to return (STAT_CONFIRMED, STAT_DEATHS etc)
         :return: total current tally of requested stat (e.g. confirmed, deaths etc)
         """
         if stat not in self.csse_daily_stat_to_col_map:
@@ -344,41 +365,21 @@ class CovidDataProcessor:
         totals = self.scope_to_totals_map[scope]
         return totals.get(column)
 
+    def get_stat_by_date_df(self, scope, stat):
+        """
 
-    def get_df_confirmed_by_date_world(self):
+        :param scope: SCOPE_WORLD or other defined scope
+        :param stat: stat to return in dataframe (STAT_CONFIRMED, STAT_DEATHS etc)
+        :return: dataframe containing requested stats per location (defined by scope) by date
         """
-        Get the dataframes for time series data on confirmed cases indexed by country
-        :return: dataframes containing confirmed cases indexed by country
-        """
-        return self.df_confirmed_by_date_world
-
-    def get_df_deaths_by_date_world(self):
-        """
-        Get the dataframes for time series data on deaths indexed by country
-        :return: dataframes containing deaths indexed by country
-        """
-        return self.df_deaths_by_date_world
-
-    def get_df_recovered_by_date_world(self):
-        """
-        Get the dataframes for time series data on recovered cases indexed by country
-        :return: dataframes containing recovered indexed by country
-        """
-        return self.df_recovered_by_date_world
-
-    def get_df_confirmed_by_date_usa(self):
-        """
-        Get the dataframe for time series data on confirmed cases indexed by state
-        :return: dataframe containing confirmed cases indexed by country
-        """
-        return self.df_confirmed_by_date_usa
-
-    def get_df_deaths_by_date_usa(self):
-        """
-        Get the dataframe for time series data on deaths indexed by state
-        :return: dataframe containing deaths indexed by country
-        """
-        return self.df_deaths_by_date_usa
+        if scope not in self.scope_and_stat_to_by_date_df_map:
+            self.logger.error(f'No data available for scope={scope}')
+            return None
+        stat_map = self.scope_and_stat_to_by_date_df_map[scope]
+        if stat not in stat_map:
+            self.logger.error(f'No data found for stat={stat} under scope={scope}')
+            return None
+        return stat_map[stat]
 
     def get_df_daily_report(self, scope):
         """
