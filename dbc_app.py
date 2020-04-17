@@ -58,7 +58,7 @@ def get_location_selector():
 def get_outbreak_chart(id):
     return dcc.Graph(
         id=id,
-        responsive=False)
+        responsive=True)
 
 stat_to_color_map = {
     STAT_CONFIRMED: 'warning',
@@ -68,18 +68,23 @@ stat_to_color_map = {
 }
 
 def get_stat_button_id(stat):
-    return f'id-button-{stat.lower()}'
+    return f'id-button-{stat}'
 
 def get_stat_collapse_id(stat):
-    return f'id-collapse-{stat.lower()}'
+    return f'id-collapse-{stat}'
+
+def get_stat_from_collapse_id(id):
+    return id.lstrip('id-collapse-')
 
 def get_stat_chart_id(stat):
-    return f'id-chart-{stat.lower()}'
+    return f'id-chart-{stat}'
 
 def get_stat_card(scope, stat):
     button_id = get_stat_button_id(stat)
     collapse_id = get_stat_collapse_id(stat)
     chart_id = get_stat_chart_id(stat)
+    chart_obj = dcc.Graph(id=chart_id)
+    chart = dcc.Loading(dbc.Row([dbc.Col(chart_obj)]))
     return dbc.Card([
         dbc.CardHeader([
             dbc.Row([
@@ -94,7 +99,7 @@ def get_stat_card(scope, stat):
                 ], width=2)
             ])
         ]),
-        dbc.Collapse(dbc.CardBody([get_outbreak_chart(chart_id)]), id=collapse_id, is_open=False)
+        dbc.Collapse(dbc.CardBody([chart]), id=collapse_id, is_open=False)
     ])
 
 def get_stat_charts_ui():
@@ -151,12 +156,12 @@ def serve_layout():
                 ],
             )
         ],
-        fluid=True,
+        fluid=False,
     )
     return layout
 
 
-app.layout = serve_layout
+app.layout = serve_layout()
 
 
 def toggle_collapse_1(*args):
@@ -168,23 +173,30 @@ def toggle_collapse_1(*args):
     else:
         input_id = ctx.triggered[0]['prop_id'].split('.')[0]
     button_collapse_opens = [args[x] for x in range(num_stats, 2 *num_stats)]
-    loc_collapse_open = False
     for i in range(num_stats):
         if input_id == get_stat_button_id(supported_stats[i]):
              button_collapse_opens[i] = not button_collapse_opens[i]
-    if any(button_collapse_opens):
-        loc_collapse_open = True
-    return button_collapse_opens + [loc_collapse_open]
+    return button_collapse_opens
 
 
 def register_stat_collapse_callback():
     outputs = [Output(get_stat_collapse_id(s), 'is_open') for s in supported_stats]
-    outputs.append(Output('id-collapse-loc', 'is_open'))
     inputs = [Input(get_stat_button_id(s), 'n_clicks') for s in supported_stats]
     states = [State(get_stat_collapse_id(s), 'is_open') for s in supported_stats]
     app.callback(outputs, inputs, states)(toggle_collapse_1)
 
 register_stat_collapse_callback()
+
+
+def toggle_collapse_controls_callabck(*args):
+    return True if any(args) else False
+
+def register_collapse_controls_callback():
+    outputs = Output('id-collapse-loc', 'is_open')
+    inputs = [Input(get_stat_collapse_id(s), 'is_open') for s in supported_stats]
+    app.callback(outputs, inputs)(toggle_collapse_controls_callabck)
+
+register_collapse_controls_callback()
 
 def process_location_dropdown_options(locations):
     options = get_location_options()
@@ -200,8 +212,12 @@ def register_location_dropdown_options_callback():
 register_location_dropdown_options_callback()
 
 def process_by_date_charts(locations, is_open):
+    ctx = dash.callback_context
+    inputs = list(ctx.inputs)
+    collapse_id = inputs[1].split('.')[0]
+    stat = get_stat_from_collapse_id(collapse_id)
     if is_open:
-        return [get_time_series_scatter_chart(dataproc.get_stat_by_date_df(SCOPE_WORLD, stat), locations))]
+        return [get_time_series_scatter_chart(dataproc.get_stat_by_date_df(SCOPE_WORLD, stat), locations)]
     else:
         raise PreventUpdate
 
