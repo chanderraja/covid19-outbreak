@@ -163,30 +163,20 @@ def serve_layout():
 
 app.layout = serve_layout()
 
-
-def toggle_collapse_1(*args):
-    num_stats = len(supported_stats)
-    button_clicks = [args[x] for x in range(num_stats)]
-    ctx = dash.callback_context
-    if not ctx.triggered or not any(button_clicks):
-        raise PreventUpdate
-    else:
-        input_id = ctx.triggered[0]['prop_id'].split('.')[0]
-    button_collapse_opens = [args[x] for x in range(num_stats, 2 *num_stats)]
-    for i in range(num_stats):
-        if input_id == get_stat_button_id(supported_stats[i]):
-             button_collapse_opens[i] = not button_collapse_opens[i]
-    return button_collapse_opens
+def toggle_collapse_callback(n, is_open):
+    if n:
+        return not is_open
+    return is_open
 
 
-def register_stat_collapse_callback():
-    outputs = [Output(get_stat_collapse_id(s), 'is_open') for s in supported_stats]
-    inputs = [Input(get_stat_button_id(s), 'n_clicks') for s in supported_stats]
-    states = [State(get_stat_collapse_id(s), 'is_open') for s in supported_stats]
-    app.callback(outputs, inputs, states)(toggle_collapse_1)
+def register_stat_collapse_callback(stat):
+    output = Output(get_stat_collapse_id(stat), 'is_open')
+    inputs = [Input(get_stat_button_id(stat), 'n_clicks')]
+    states = [State(get_stat_collapse_id(stat), 'is_open')]
+    app.callback(output, inputs, states)(toggle_collapse_callback)
 
-register_stat_collapse_callback()
-
+for s in supported_stats:
+    register_stat_collapse_callback(s)
 
 def toggle_collapse_controls_callabck(*args):
     return True if any(args) else False
