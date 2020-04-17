@@ -16,6 +16,12 @@ supported_stats = [STAT_CONFIRMED, STAT_DEATHS, STAT_RECOVERED]
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
 server = app.server
 
+# widget IDS
+MAX_COMPARE_LOCS=5
+ID_DROPDOWN_LOC='id-dropdown-loc'
+
+LOC_WORLDWIDE='Worldwide'
+
 dataproc = CovidDataProcessor()
 
 map = dcc.Graph(
@@ -34,12 +40,13 @@ def get_location_selector():
         [
             dbc.FormGroup(
                 [
-                    dbc.Label('Select up to 5 locations to compare'),
+                    dbc.Label(f'Select up to {MAX_COMPARE_LOCS} locations to compare'),
                     dcc.Dropdown(
-                        id='id-loc-dropdown',
+                        id=ID_DROPDOWN_LOC,
                         options=get_location_options(),
-                        value=['Worldwide'],
-                        multi=True
+                        value=[LOC_WORLDWIDE],
+                        multi=True,
+                        persistence=True
                     ),
                 ]
             )
@@ -73,25 +80,22 @@ def get_stat_card(scope, stat):
     button_id = get_stat_button_id(stat)
     collapse_id = get_stat_collapse_id(stat)
     chart_id = get_stat_chart_id(stat)
-    return dbc.Card(
-        dbc.CardBody(
-            [
-                dbc.Button(
-                    id=button_id,
-                    children=[stat,
-                              dbc.Badge(f'{dataproc.get_total_stat(scope, stat):,}',
-                                        color='light',
-                                        className="ml-1")],
-                    size='lg',
-                    color=stat_to_color_map.get(stat)
-                ),
-                dbc.Collapse(
-                    get_outbreak_chart(chart_id),
-                    id=collapse_id,
-                ),
-            ]
-        )
-    )
+    return dbc.Card([
+        dbc.CardHeader([
+            dbc.Row([
+                dbc.Col([
+                    dbc.Button(
+                        id=button_id,
+                        children=[
+                            stat,
+                            dbc.Badge(f'{dataproc.get_total_stat(scope, stat):,}', color='light', className="ml-1")
+                        ], size='lg', color=stat_to_color_map.get(stat)
+                    )
+                ], width=2)
+            ])
+        ]),
+        dbc.Collapse(dbc.CardBody([get_outbreak_chart(chart_id)]), id=collapse_id, is_open=False)
+    ])
 
 def get_stat_charts_ui():
     ui =    \
@@ -182,33 +186,34 @@ def register_stat_collapse_callback():
 
 register_stat_collapse_callback()
 
-def process_by_date_charts(locations):
-    charts = [get_time_series_scatter_chart(dataproc.get_stat_by_date_df(SCOPE_WORLD, stat), locations)
-                                            for stat in supported_stats]
+def process_location_dropdown_options(locations):
     options = get_location_options()
-    if len(locations) == 5:
+    if len(locations) == MAX_COMPARE_LOCS:
         options = [x for x in options if x['value'] in locations]
-    return charts + [options]
+    return [options]
 
-def register_by_date_charts_callback():
-    outputs = [Output(get_stat_chart_id(s), 'figure') for s in supported_stats]
-    outputs.append(Output('id-loc-dropdown', 'options'))
-    inputs = [Input('id-loc-dropdown', 'value')]
+def register_location_dropdown_options_callback():
+    outputs = [Output(ID_DROPDOWN_LOC, 'options')]
+    inputs = [Input(ID_DROPDOWN_LOC, 'value')]
+    app.callback(outputs, inputs)(process_location_dropdown_options)
+
+register_location_dropdown_options_callback()
+
+def process_by_date_charts(locations, is_open):
+    if is_open:
+        return [get_time_series_scatter_chart(dataproc.get_stat_by_date_df(SCOPE_WORLD, stat), locations))]
+    else:
+        raise PreventUpdate
+
+def register_by_date_charts_callback(stat):
+    outputs = [Output(get_stat_chart_id(stat), 'figure')]
+    inputs = [Input(ID_DROPDOWN_LOC, 'value')]
+    inputs += [Input(get_stat_collapse_id(stat), 'is_open')]
     app.callback(outputs, inputs)(process_by_date_charts)
 
-register_by_date_charts_callback()
+for s in supported_stats:
+    register_by_date_charts_callback(s)
 
-'''
-# functionality is the same for both dropdowns, so we reuse filter_options
-app.callback(
-    [Output('id-chart-confirmed', 'figure'),
-    Output('id-chart-deaths', 'figure'),
-    Output('id-chart-recovered', 'figure'),
-    Output('id-loc-dropdown', 'options')],
-    [Input('id-loc-dropdown', 'value')])(
-    process_time_graph
-)
-'''
 
 if __name__ == '__main__':
     app.run_server(debug=False, port=8888)

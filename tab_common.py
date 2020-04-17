@@ -78,5 +78,5 @@ def get_time_series_scatter_chart(df, locations=None, title=None, logger=None):
         ),
     )
 
-    fig = go.Figure(data=data, layout=layout)
+    fig = dict(data=data, layout=layout)
     return fig
