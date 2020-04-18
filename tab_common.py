@@ -55,6 +55,8 @@ def get_mapbox(id, title, scope):
     ),
 
 def get_time_series_scatter_chart(df, locations=None, title=None, logger=None):
+    if df is None:
+        return dict(data=dict())
     x_list = [pd.to_datetime(d).date() for d in df.columns]
     data = []
     if locations is not None and isinstance(locations, list):

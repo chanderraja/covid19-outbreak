@@ -8,6 +8,9 @@ from tab_common import get_status_boxes
 from plotutils import get_choropleth_mapbox
 from tab_usa import get_choropleth_mapbox_usa
 
+def get_top_loations(scope, n=10):
+    pass
+
 def get_choropleth_mapbox_world(dataproc: CovidDataProcessor, logger):
     mapbox_access_token = os.environ.get('MAPBOX_TOKEN')
     geojson = dataproc.get_geojson(scope=SCOPE_WORLD)

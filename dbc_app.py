@@ -4,9 +4,13 @@ import dash_html_components as html
 import dash_core_components as dcc
 import dash_bootstrap_components as dbc
 from dash.exceptions import PreventUpdate
-from covid_data import CovidDataProcessor, SCOPE_WORLD, STAT_CONFIRMED, STAT_DEATHS, STAT_RECOVERED, STAT_ACTIVE
+from covid_data import CovidDataProcessor, SCOPE_WORLD, SCOPE_USA, SCOPE_US_COUNTIES
+from covid_data import STAT_CONFIRMED, STAT_DEATHS, STAT_RECOVERED, STAT_ACTIVE
+from covid_data import LOC_WORLD_OVERALL, LOC_USA_OVERALL
 from tab_common import get_time_series_scatter_chart
 from tab_world import get_choropleth_mapbox_world
+from tab_usa import get_choropleth_mapbox_usa
+from tab_us_counties import get_choropleth_mapbox_us_counties
 
 supported_stats = [STAT_CONFIRMED, STAT_DEATHS, STAT_RECOVERED]
 
@@ -19,23 +23,41 @@ server = app.server
 # widget IDS
 MAX_COMPARE_LOCS=5
 ID_DROPDOWN_LOC='id-dropdown-loc'
-
-LOC_WORLDWIDE='Worldwide'
+ID_DIV_SCOPE='id-div-scope'
 
 dataproc = CovidDataProcessor()
 
-map = dcc.Graph(
-    id='id-outbreak-map',
-    figure=get_choropleth_mapbox_world(dataproc, logger=app.logger),
-    responsive=True,
-)
+def get_map(scope):
+    if scope == SCOPE_WORLD:
+        map = get_choropleth_mapbox_world(dataproc, logger=app.logger)
+    elif scope == SCOPE_USA:
+        map = get_choropleth_mapbox_usa(dataproc, logger=app.logger)
+    elif scope== SCOPE_US_COUNTIES:
+        map = get_choropleth_mapbox_us_counties(dataproc, logger=app.logger)
+    else:
+        return None
+    graph = dcc.Graph(
+        id='id-outbreak-map',
+        figure=map,
+        responsive=True,
+    )
+    return graph
 
-def get_location_options():
-    df = dataproc.get_stat_by_date_df(SCOPE_WORLD, STAT_CONFIRMED)
+def get_location_options(scope):
+    df = dataproc.get_stat_by_date_df(scope, STAT_CONFIRMED)
     options = [{'label': i, 'value': i} for i in df.index]
     return options
 
-def get_location_selector():
+def get_location_overall(scope):
+    if scope == SCOPE_WORLD:
+        return LOC_WORLD_OVERALL
+    elif scope == SCOPE_USA:
+        return LOC_USA_OVERALL
+    elif scope == SCOPE_US_COUNTIES:
+        return LOC_USA_OVERALL
+    return 'Not implemented'
+
+def get_location_selector(scope):
     return dbc.Collapse(
         [
             dbc.FormGroup(
@@ -43,8 +65,8 @@ def get_location_selector():
                     dbc.Label(f'Select up to {MAX_COMPARE_LOCS} locations to compare'),
                     dcc.Dropdown(
                         id=ID_DROPDOWN_LOC,
-                        options=get_location_options(),
-                        value=[LOC_WORLDWIDE],
+                        options=get_location_options(scope),
+                        value=[get_location_overall(scope)],
                         multi=True,
                         persistence=True
                     ),
@@ -53,12 +75,6 @@ def get_location_selector():
         ],
         id='id-collapse-loc'
     )
-
-
-def get_outbreak_chart(id):
-    return dcc.Graph(
-        id=id,
-        responsive=True)
 
 stat_to_color_map = {
     STAT_CONFIRMED: 'warning',
@@ -102,10 +118,10 @@ def get_stat_card(scope, stat):
         dbc.Collapse(dbc.CardBody([chart]), id=collapse_id, is_open=False)
     ])
 
-def get_stat_charts_ui():
+def get_stat_charts_ui(scope):
     ui =    \
     [
-        dbc.Row([dbc.Col(get_location_selector(), md=8)],
+        dbc.Row([dbc.Col(get_location_selector(scope))],
             align='center',
             justify='left'
         )
@@ -113,50 +129,30 @@ def get_stat_charts_ui():
 
     ui += \
     [
-        dbc.Row(dbc.Col(get_stat_card(SCOPE_WORLD, x), md=8), justify='left') for x in supported_stats
+        dbc.Row(dbc.Col(get_stat_card(scope, x)), justify='left') for x in supported_stats
     ]
     return ui
 
 def serve_layout():
+    scope = SCOPE_US_COUNTIES
     layout = dbc.Container(
         [
             html.H1("My Dashboard"),
             html.Hr(),
             dbc.Row(
                 [
-                    dbc.Col(get_stat_charts_ui(), md=6),
-                    dbc.Col(
-                        dbc.Card(
-                            [
-                                dbc.CardHeader(html.H2('Header')),
-                                dbc.CardBody(),
-                                dbc.CardFooter('Footer'),
-                            ]
-                        ),
-                        md=6
-                    )
+                    dbc.Col(get_stat_charts_ui(scope), lg=12),
                 ]
             ),
-            dbc.Card(
+            dbc.Row(
                 [
-                    dbc.CardBody(
-                        [
-                            dbc.Row(
-                                [
-                                    dbc.Col(
-                                        dbc.Card([map]),
-                                        lg=12
-                                    ),
-                                ],
-                                align='center',
-                                justify='center'
-                            ),
-                        ]
-                    ),
+                    dbc.Col(dbc.Card([get_map(scope)]), lg=12),
                 ],
-            )
-        ],
-        fluid=False,
+                align='center',
+                justify='center'
+            ),
+            html.Div(id=ID_DIV_SCOPE, children=scope, style={'display': 'none'}),
+        ], fluid=True,
     )
     return layout
 
@@ -188,26 +184,26 @@ def register_collapse_controls_callback():
 
 register_collapse_controls_callback()
 
-def process_location_dropdown_options(locations):
-    options = get_location_options()
+def process_location_dropdown_options(locations, scope):
+    options = get_location_options(scope)
     if len(locations) == MAX_COMPARE_LOCS:
         options = [x for x in options if x['value'] in locations]
     return [options]
 
 def register_location_dropdown_options_callback():
     outputs = [Output(ID_DROPDOWN_LOC, 'options')]
-    inputs = [Input(ID_DROPDOWN_LOC, 'value')]
+    inputs = [Input(ID_DROPDOWN_LOC, 'value'), Input(ID_DIV_SCOPE, 'children')]
     app.callback(outputs, inputs)(process_location_dropdown_options)
 
 register_location_dropdown_options_callback()
 
-def process_by_date_charts(locations, is_open):
+def process_by_date_charts(locations, is_open, scope):
     ctx = dash.callback_context
     inputs = list(ctx.inputs)
     collapse_id = inputs[1].split('.')[0]
     stat = get_stat_from_collapse_id(collapse_id)
     if is_open:
-        return [get_time_series_scatter_chart(dataproc.get_stat_by_date_df(SCOPE_WORLD, stat), locations)]
+        return [get_time_series_scatter_chart(dataproc.get_stat_by_date_df(scope, stat), locations)]
     else:
         raise PreventUpdate
 
@@ -215,6 +211,7 @@ def register_by_date_charts_callback(stat):
     outputs = [Output(get_stat_chart_id(stat), 'figure')]
     inputs = [Input(ID_DROPDOWN_LOC, 'value')]
     inputs += [Input(get_stat_collapse_id(stat), 'is_open')]
+    inputs += [Input(ID_DIV_SCOPE, 'children')]
     app.callback(outputs, inputs)(process_by_date_charts)
 
 for s in supported_stats:

@@ -9,6 +9,10 @@ SCOPE_WORLD='Worldwide'         # worldwide scope indexed by countries
 SCOPE_USA='United States'       # US scope indexed by states
 SCOPE_US_COUNTIES='US Counties' # US scope indexed by counties
 
+# Location string for overall computations
+LOC_WORLD_OVERALL='Worldwide'
+LOC_USA_OVERALL='US Total'
+
 # Stats
 STAT_CONFIRMED='Confirmed'
 STAT_DEATHS='Deaths'
@@ -28,7 +32,7 @@ CSSE_DAILY_COL_CONFIRMED='Confirmed'
 CSSE_DAILY_COL_DEATHS='Deaths'
 CSSE_DAILY_COL_RECOVERED='Recovered'
 CSSE_DAILY_COL_ACTIVE='Active'
-CSSE_DAILY_COL_LOC_COMBINED='Combined_Key'
+CSSE_DAILY_COL_COMBINED_KEY= 'Combined_Key'
 CSSE_DAILY_COL_HOVERTEXT='Hovertext'
 CSSE_DAILY_COL_LAST_UPDATE='Last_Update'
 
@@ -43,15 +47,18 @@ CSSE_TIMESERIES_COL_USA_LATITUDE=CSSE_DAILY_COL_LATITUDE
 CSSE_TIMESERIES_COL_USA_LONGITUDE=CSSE_DAILY_COL_LONGITUDE
 CSSE_TIMESERIES_COL_USA_UID='UID'
 CSSE_TIMESERIES_COL_USA_ISO2='iso2'
-CSSE_TIMESERIES_COL_USA_ISO2='iso3'
+CSSE_TIMESERIES_COL_USA_ISO3='iso3'
 CSSE_TIMESERIES_COL_USA_CODE3='code3'
 CSSE_TIMESERIES_COL_USA_FIPS='FIPS'
+CSSE_TIMESERIES_COL_USA_ADMIN2='Admin2'
+CSSE_TIMESERIES_COL_USA_POPULATION='Population'
+CSSE_TIMESERIES_COL_USA_COMBINED_KEY='Combined_Key'
 
 
 
 def get_location(row):
-    if CSSE_DAILY_COL_LOC_COMBINED in row.index:
-        return row[CSSE_DAILY_COL_LOC_COMBINED]
+    if CSSE_DAILY_COL_COMBINED_KEY in row.index:
+        return row[CSSE_DAILY_COL_COMBINED_KEY]
     if CSSE_DAILY_COL_PROVINCE_STATE in row.index:
         if CSSE_DAILY_COL_COUNTRY_REGION in row.index:
             return row[CSSE_DAILY_COL_PROVINCE_STATE] + ', ' + row[CSSE_DAILY_COL_COUNTRY_REGION]
@@ -183,7 +190,7 @@ class CovidDataProcessor:
         # make a world countries data frame
         self.logger.info('processing daily global data...')
         self.df_daily_world = df_daily_global.drop(
-            columns=[CSSE_DAILY_COL_FIPS, CSSE_DAILY_COL_PROVINCE_STATE, CSSE_DAILY_COL_ADMIN2, CSSE_DAILY_COL_LOC_COMBINED])
+            columns=[CSSE_DAILY_COL_FIPS, CSSE_DAILY_COL_PROVINCE_STATE, CSSE_DAILY_COL_ADMIN2, CSSE_DAILY_COL_COMBINED_KEY])
         self.df_daily_world = self.df_daily_world.groupby(
             self.df_daily_world[CSSE_DAILY_COL_COUNTRY_REGION]).aggregate(self.daily_aggregation_functions)
         self.df_daily_world.rename(self.rename_countries, inplace=True)
@@ -201,6 +208,7 @@ class CovidDataProcessor:
         # drop rows with NaN in FIPS column
         self.df_daily_us_counties = self.df_daily_us_counties[self.df_daily_us_counties[CSSE_DAILY_COL_FIPS].notna()]
         self.df_daily_us_counties[CSSE_DAILY_COL_HOVERTEXT] = add_hovertext(self.df_daily_us_counties)
+        self.df_daily_us_counties.set_index(keys=CSSE_DAILY_COL_FIPS, inplace=True)
 
         # make a US states dataframe
         self.logger.info('Deriving data for US states...')
@@ -216,11 +224,13 @@ class CovidDataProcessor:
         self.scope_to_totals_map[SCOPE_USA] = self.usa_totals
         self.scope_to_totals_map[SCOPE_US_COUNTIES] = self.usa_totals
 
-    def __get_csse_time_series_data(self, url, sum_index='Total', dropcolumns_func=None, aggregate_func=None, logtext=None, rename_countries=False):
+    def __get_csse_time_series_data(self, url, set_index=None, sum_index='Total', dropcolumns_func=None, aggregate_func=None, logtext=None, rename_countries=False):
         if logtext is not None:
             self.logger.info(f'Reading {logtext} data from {url}...')
         df = pd.read_csv(url)
 
+        if set_index is not None:
+            df.set_index(keys=set_index, inplace=True)
         if dropcolumns_func is not None:
             self.logger.info(f'Dropping unwanted columns...')
             dropcolumns_func(df)
@@ -231,7 +241,7 @@ class CovidDataProcessor:
             df.sort_index(inplace=True)
         sum = df.aggregate('sum')
         df_sum = pd.DataFrame([sum], index=[sum_index])
-        df = pd.concat([df_sum, df])
+        df = pd.concat([df_sum, df], sort=False)
         return df, sum
 
     def __read_csse_time_series_reports(self):
@@ -256,7 +266,7 @@ class CovidDataProcessor:
                 aggregate_func=aggregate_sums_global,
                 logtext='global time series confirmed cases',
                 rename_countries=True,
-                sum_index='Worldwide'
+                sum_index=LOC_WORLD_OVERALL
             )
 
         self.scope_and_stat_to_by_date_df_map[SCOPE_WORLD][STAT_CONFIRMED] = self.df_confirmed_by_date_world
@@ -268,7 +278,7 @@ class CovidDataProcessor:
                 aggregate_func=aggregate_sums_global,
                 logtext='global time series deaths',
                 rename_countries=True,
-                sum_index = 'Worldwide'
+                sum_index = LOC_WORLD_OVERALL
         )
 
         self.scope_and_stat_to_by_date_df_map[SCOPE_WORLD][STAT_DEATHS] = self.df_deaths_by_date_world
@@ -280,7 +290,7 @@ class CovidDataProcessor:
                 aggregate_func=aggregate_sums_global,
                 logtext='global time series recovered cases',
                 rename_countries=True,
-                sum_index = 'Worldwide'
+                sum_index = LOC_WORLD_OVERALL
         )
 
         self.scope_and_stat_to_by_date_df_map[SCOPE_WORLD][STAT_RECOVERED] = self.df_recovered_by_date_world
@@ -296,11 +306,13 @@ class CovidDataProcessor:
                 CSSE_TIMESERIES_COL_USA_LONGITUDE,
                 CSSE_TIMESERIES_COL_USA_UID,
                 CSSE_TIMESERIES_COL_USA_ISO2,
-                CSSE_TIMESERIES_COL_USA_ISO2,
+                CSSE_TIMESERIES_COL_USA_ISO3,
                 CSSE_TIMESERIES_COL_USA_CODE3,
                 CSSE_TIMESERIES_COL_USA_FIPS,
+                CSSE_TIMESERIES_COL_USA_POPULATION
             ],
-            inplace=True
+            inplace=True,
+            errors='ignore'
         )
         aggregate_sums_usa = lambda df: df.groupby(df[CSSE_TIMESERIES_COL_USA_PROVINCE_STATE]).aggregate('sum')
 
@@ -309,8 +321,8 @@ class CovidDataProcessor:
                 url=csse_timeseries_confirmed_usa_csv,
                 dropcolumns_func=drop_columns_usa,
                 aggregate_func=aggregate_sums_usa,
-                logtext='global time series confirmed cases',
-                sum_index = 'US Total'
+                logtext='USA time series confirmed cases',
+                sum_index = LOC_USA_OVERALL
         )
 
         self.scope_and_stat_to_by_date_df_map[SCOPE_USA][STAT_CONFIRMED] = self.df_confirmed_by_date_usa
@@ -320,12 +332,53 @@ class CovidDataProcessor:
                 url=csse_timeseries_deaths_usa_csv,
                 dropcolumns_func=drop_columns_usa,
                 aggregate_func=aggregate_sums_usa,
-                logtext='global time series confirmed cases',
-                sum_index = 'US Total'
+                logtext='USA time series confirmed cases',
+                sum_index = LOC_USA_OVERALL
             )
 
         self.scope_and_stat_to_by_date_df_map[SCOPE_USA][STAT_DEATHS] = self.df_deaths_by_date_usa
 
+        drop_columns_us_counties = lambda df: df.drop(
+            columns=[
+                CSSE_TIMESERIES_COL_USA_COUNTRY_REGION,
+                CSSE_TIMESERIES_COL_USA_PROVINCE_STATE,
+                CSSE_TIMESERIES_COL_USA_LATITUDE,
+                CSSE_TIMESERIES_COL_USA_LONGITUDE,
+                CSSE_TIMESERIES_COL_USA_UID,
+                CSSE_TIMESERIES_COL_USA_ISO2,
+                CSSE_TIMESERIES_COL_USA_ISO3,
+                CSSE_TIMESERIES_COL_USA_ADMIN2,
+                CSSE_TIMESERIES_COL_USA_CODE3,
+                CSSE_TIMESERIES_COL_USA_FIPS,
+                CSSE_TIMESERIES_COL_USA_POPULATION
+            ],
+            inplace=True,
+            errors='ignore'
+        )
+
+
+        self.df_confirmed_by_date_us_counties, self.confirmed_totals_us_counties = \
+            self.__get_csse_time_series_data(
+                url=csse_timeseries_confirmed_usa_csv,
+                dropcolumns_func=drop_columns_us_counties,
+                logtext='US time series confirmed cases',
+                sum_index = LOC_USA_OVERALL,
+                set_index = CSSE_TIMESERIES_COL_USA_COMBINED_KEY
+        )
+
+        self.scope_and_stat_to_by_date_df_map[SCOPE_US_COUNTIES][STAT_CONFIRMED] = self.df_confirmed_by_date_us_counties
+
+        self.df_deaths_by_date_us_counties, self.deaths_totals_us_counties = \
+            self.__get_csse_time_series_data(
+                url=csse_timeseries_confirmed_usa_csv,
+                dropcolumns_func=drop_columns_us_counties,
+                logtext='US time series confirmed cases',
+                sum_index = LOC_USA_OVERALL,
+                set_index=CSSE_TIMESERIES_COL_USA_COMBINED_KEY
+        )
+
+        self.scope_and_stat_to_by_date_df_map[SCOPE_US_COUNTIES][STAT_DEATHS] = self.df_deaths_by_date_us_counties
+        pass
 
     def __init__(self, *args, **kwargs):
         self.__init_logger()
