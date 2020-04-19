@@ -128,7 +128,7 @@ def get_choropleth_mapbox(geojson, locations, z, hovertext,  mapbox_token,
 
     fig.update_layout(
         title=name,
-        mapbox_style='light',
+        mapbox_style='open-street-map',
         mapbox_accesstoken=mapbox_token,
         mapbox_zoom=2,
         mapbox_center={"lat": 37.0902, "lon": -95.7129}

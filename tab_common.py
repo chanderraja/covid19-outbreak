@@ -4,8 +4,14 @@ import dash_html_components as html
 import dash_admin_components as dac
 import dash_core_components as dcc
 from plotutils import get_choropleth_mapbox
-from covid_data import CSSE_DAILY_COL_CONFIRMED
+from covid_data import STAT_CONFIRMED, STAT_DEATHS, STAT_RECOVERED, STAT_ACTIVE
 
+stat_to_color_map = {
+    STAT_CONFIRMED: 'warning',
+    STAT_RECOVERED: 'success',
+    STAT_DEATHS: 'danger',
+    STAT_ACTIVE: 'info'
+}
 def get_status_boxes(confirmed, deaths, recovered, active):
     return html.Div([
         dac.InfoBox(
@@ -53,6 +59,27 @@ def get_mapbox(id, title, scope):
             )
         ],
     ),
+
+def get_top_locations_bar_chart(df, stat, n=10, logger=None):
+    if df is None:
+        return dict(data=dict())
+    data = []
+    x_axis = df.index
+    y_axis = df[stat]
+    data.append(
+        dict(name=df.index,
+             x=x_axis,
+             y=y_axis,
+             type='bar',
+             text=y_axis))
+    figure = dict(
+        data=data,
+        layout=dict(
+            title='Top 10',
+            xaxis = dict(tickangle = 45),
+            margin = dict(b = 160),
+            autosize=True))
+    return figure
 
 def get_time_series_scatter_chart(df, locations=None, title=None, logger=None):
     if df is None:

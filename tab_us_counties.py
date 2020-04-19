@@ -20,7 +20,7 @@ def get_choropleth_mapbox_us_counties(dataproc: CovidDataProcessor, logger):
                                 z=df_positive[CSSE_DAILY_COL_CONFIRMED],
                                 color_boundaries = bvals,
                                 color_min = '#ffffcc',
-                                color_max = '#654321',
+                                color_max = '#8b0000',
                                 hovertext=df_positive[CSSE_DAILY_COL_HOVERTEXT],
                                 mapbox_token=mapbox_access_token,
                                 logarithmic = True)

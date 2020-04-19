@@ -7,7 +7,7 @@ from dash.exceptions import PreventUpdate
 from covid_data import CovidDataProcessor, SCOPE_WORLD, SCOPE_USA, SCOPE_US_COUNTIES
 from covid_data import STAT_CONFIRMED, STAT_DEATHS, STAT_RECOVERED, STAT_ACTIVE
 from covid_data import LOC_WORLD_OVERALL, LOC_USA_OVERALL
-from tab_common import get_time_series_scatter_chart
+from tab_common import get_time_series_scatter_chart, get_top_locations_bar_chart, stat_to_color_map
 from tab_world import get_choropleth_mapbox_world
 from tab_usa import get_choropleth_mapbox_usa
 from tab_us_counties import get_choropleth_mapbox_us_counties
@@ -21,7 +21,7 @@ app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
 server = app.server
 
 # widget IDS
-MAX_COMPARE_LOCS=5
+MAX_COMPARE_LOCS=10
 ID_DROPDOWN_LOC='id-dropdown-loc'
 ID_DIV_SCOPE='id-div-scope'
 
@@ -76,12 +76,6 @@ def get_location_selector(scope):
         id='id-collapse-loc'
     )
 
-stat_to_color_map = {
-    STAT_CONFIRMED: 'warning',
-    STAT_RECOVERED: 'success',
-    STAT_DEATHS: 'danger',
-    STAT_ACTIVE: 'info'
-}
 
 def get_stat_button_id(stat):
     return f'id-button-{stat}'
@@ -92,15 +86,21 @@ def get_stat_collapse_id(stat):
 def get_stat_from_collapse_id(id):
     return id.lstrip('id-collapse-')
 
-def get_stat_chart_id(stat):
-    return f'id-chart-{stat}'
+def get_stat_over_time_chart_id(stat):
+    return f'id-stat-over-time-chart-{stat}'
+
+def get_top_n_chart_id(stat):
+    return f'id-stat-top-n-chart-{stat}'
 
 def get_stat_card(scope, stat):
     button_id = get_stat_button_id(stat)
     collapse_id = get_stat_collapse_id(stat)
-    chart_id = get_stat_chart_id(stat)
-    chart_obj = dcc.Graph(id=chart_id)
-    chart = dcc.Loading(dbc.Row([dbc.Col(chart_obj)]))
+    time_chart_obj = dcc.Graph(id=get_stat_over_time_chart_id(stat))
+    top_n_chart_obj = dcc.Graph(
+        id=get_top_n_chart_id(stat),
+        figure=get_top_locations_bar_chart(dataproc.get_top_locations(scope, stat, 10), stat)
+    )
+    chart = dcc.Loading(dbc.Row([dbc.Col(time_chart_obj), dbc.Col(top_n_chart_obj)]))
     return dbc.Card([
         dbc.CardHeader([
             dbc.Row([
@@ -127,14 +127,16 @@ def get_stat_charts_ui(scope):
         )
     ]
 
+    cols = lambda scope, stat: dbc.Col(get_stat_card(scope, stat))
+
     ui += \
     [
-        dbc.Row(dbc.Col(get_stat_card(scope, x)), justify='left') for x in supported_stats
+        dbc.Row(cols(scope, x), justify='left') for x in supported_stats
     ]
     return ui
 
 def serve_layout():
-    scope = SCOPE_US_COUNTIES
+    scope = SCOPE_WORLD
     layout = dbc.Container(
         [
             html.H1("My Dashboard"),
@@ -208,7 +210,7 @@ def process_by_date_charts(locations, is_open, scope):
         raise PreventUpdate
 
 def register_by_date_charts_callback(stat):
-    outputs = [Output(get_stat_chart_id(stat), 'figure')]
+    outputs = [Output(get_stat_over_time_chart_id(stat), 'figure')]
     inputs = [Input(ID_DROPDOWN_LOC, 'value')]
     inputs += [Input(get_stat_collapse_id(stat), 'is_open')]
     inputs += [Input(ID_DIV_SCOPE, 'children')]

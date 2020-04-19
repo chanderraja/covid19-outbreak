@@ -76,6 +76,7 @@ def get_hovertext(row):
 
 
 add_hovertext = lambda df: df.apply(lambda row: get_hovertext(row), axis=1)
+add_location = lambda df: df.apply(lambda row: get_location(row), axis=1)
 
 
 class CovidDataProcessor:
@@ -208,6 +209,8 @@ class CovidDataProcessor:
         # drop rows with NaN in FIPS column
         self.df_daily_us_counties = self.df_daily_us_counties[self.df_daily_us_counties[CSSE_DAILY_COL_FIPS].notna()]
         self.df_daily_us_counties[CSSE_DAILY_COL_HOVERTEXT] = add_hovertext(self.df_daily_us_counties)
+        self.df_daily_us_counties[CSSE_DAILY_COL_FIPS] = self.df_daily_us_counties[CSSE_DAILY_COL_FIPS].astype(str)
+        self.df_daily_us_counties[CSSE_DAILY_COL_FIPS] = self.df_daily_us_counties[CSSE_DAILY_COL_FIPS].apply('{:0>5}'.format)
         self.df_daily_us_counties.set_index(keys=CSSE_DAILY_COL_FIPS, inplace=True)
 
         # make a US states dataframe
@@ -420,7 +423,7 @@ class CovidDataProcessor:
 
     def get_stat_by_date_df(self, scope, stat):
         """
-
+        return dataframe containing stat by date
         :param scope: SCOPE_WORLD or other defined scope
         :param stat: stat to return in dataframe (STAT_CONFIRMED, STAT_DEATHS etc)
         :return: dataframe containing requested stats per location (defined by scope) by date
@@ -453,3 +456,7 @@ class CovidDataProcessor:
         else:
             return None
 
+    def get_top_locations(self, scope, stat, n=10):
+        df = self.get_df_daily_report(scope).nlargest(n=n, columns=[stat])
+        df.set_index(add_location(df), inplace=True)
+        return df
