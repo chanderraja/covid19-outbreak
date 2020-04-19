@@ -21,8 +21,11 @@ app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
 server = app.server
 
 # widget IDS
-MAX_COMPARE_LOCS=10
+MAX_COMPARE_LOCS=5
 ID_DROPDOWN_LOC='id-dropdown-loc'
+ID_COLLAPSE_LOC='id-collapse-loc'
+ID_BUTTON_SELECT_TOP_CONFIRMED= 'id-button-select-top-confirmed'
+ID_BUTTON_SELECT_TOP_DEATHS= 'id-button-select-top-deaths'
 ID_DIV_SCOPE='id-div-scope'
 
 dataproc = CovidDataProcessor()
@@ -70,10 +73,21 @@ def get_location_selector(scope):
                         multi=True,
                         persistence=True
                     ),
+                    html.Br(),
+                    dbc.FormGroup([
+                        dbc.Button(
+                            f'Click to select the top {MAX_COMPARE_LOCS} locations in confirmed cases',
+                            id=ID_BUTTON_SELECT_TOP_CONFIRMED
+                        ),
+                        dbc.Button(
+                            f'Click to compare the top {MAX_COMPARE_LOCS} locations in deaths',
+                            id=ID_BUTTON_SELECT_TOP_DEATHS
+                        ),
+                    ], className='row')
                 ]
             )
         ],
-        id='id-collapse-loc'
+        id=ID_COLLAPSE_LOC
     )
 
 
@@ -166,7 +180,6 @@ def toggle_collapse_callback(n, is_open):
         return not is_open
     return is_open
 
-
 def register_stat_collapse_callback(stat):
     output = Output(get_stat_collapse_id(stat), 'is_open')
     inputs = [Input(get_stat_button_id(stat), 'n_clicks')]
@@ -180,7 +193,7 @@ def toggle_collapse_controls_callabck(*args):
     return True if any(args) else False
 
 def register_collapse_controls_callback():
-    outputs = Output('id-collapse-loc', 'is_open')
+    outputs = Output(ID_COLLAPSE_LOC, 'is_open')
     inputs = [Input(get_stat_collapse_id(s), 'is_open') for s in supported_stats]
     app.callback(outputs, inputs)(toggle_collapse_controls_callabck)
 
@@ -194,10 +207,28 @@ def process_location_dropdown_options(locations, scope):
 
 def register_location_dropdown_options_callback():
     outputs = [Output(ID_DROPDOWN_LOC, 'options')]
-    inputs = [Input(ID_DROPDOWN_LOC, 'value'), Input(ID_DIV_SCOPE, 'children')]
+    inputs = [Input(ID_DROPDOWN_LOC, 'value'),
+              Input(ID_DIV_SCOPE, 'children')]
     app.callback(outputs, inputs)(process_location_dropdown_options)
 
 register_location_dropdown_options_callback()
+
+@app.callback(
+    Output(ID_DROPDOWN_LOC, 'value'),
+    [Input(ID_BUTTON_SELECT_TOP_CONFIRMED, 'n_clicks'),
+     Input(ID_BUTTON_SELECT_TOP_DEATHS, 'n_clicks'),
+     Input(ID_DIV_SCOPE, 'children')]
+)
+def select_top_locations_button_callback(sel_top_confirmed, sel_top_deaths, scope):
+    if not sel_top_confirmed and not sel_top_deaths:
+        raise PreventUpdate
+    ctx = dash.callback_context
+    input = ctx.triggered[0]['prop_id'].split('.')[0]
+    stat = STAT_CONFIRMED if input == ID_BUTTON_SELECT_TOP_CONFIRMED else STAT_DEATHS
+    df = dataproc.get_top_locations(scope, stat, n=MAX_COMPARE_LOCS)
+    locs = list(df.index)
+    return locs
+
 
 def process_by_date_charts(locations, is_open, scope):
     ctx = dash.callback_context
