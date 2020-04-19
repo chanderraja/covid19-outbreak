@@ -1,12 +1,6 @@
 import os
-import dash_html_components as html
-import dash_core_components as dcc
-import dash_bootstrap_components as dbc
-import dash_admin_components as dac
 from covid_data import CovidDataProcessor, SCOPE_WORLD, CSSE_DAILY_COL_CONFIRMED, CSSE_DAILY_COL_HOVERTEXT
-from tab_common import get_status_boxes
 from plotutils import get_choropleth_mapbox
-from tab_usa import get_choropleth_mapbox_usa
 
 
 def get_choropleth_mapbox_world(dataproc: CovidDataProcessor, logger):
@@ -43,74 +37,3 @@ def get_choropleth_mapbox_world(dataproc: CovidDataProcessor, logger):
                                 featureid_key=featureid_key)
     return fig
 
-
-def get_tab_content_world(data: CovidDataProcessor, logger=None):
-    confirmed = data.get_total_confirmed(SCOPE_WORLD)
-    deaths = data.get_total_deaths(SCOPE_WORLD)
-    recovered = data.get_total_recovered(SCOPE_WORLD)
-    active = data.get_total_active(SCOPE_WORLD)
-
-    status_boxes = get_status_boxes(confirmed, deaths, recovered, active)
-
-    return dac.TabItem(
-        id='id-tab-content-world',
-        children=html.Div(
-            [
-                html.Div(
-                    [
-                        status_boxes,
-                        dac.SimpleBox(
-                            style={'height': "600px"},
-                            width=12,
-                            title='World Outbreak Map',
-                            children=[
-                                dcc.Graph(
-                                    id='id-mapbox-world',
-                                    config=dict(displayModeBar=False),
-                                    style={'width': '75vw'},
-                                    figure=get_choropleth_mapbox_usa(dataproc=data, logger=logger),
-                                )
-                            ],
-                        ),
-                        dac.SimpleBox(
-                            style={'height': "600px"},
-                            width=12,
-                            children=[
-                                html.Div(
-                                    [
-                                        dbc.FormGroup(
-                                            [
-                                                dbc.Label("Select Location"),
-                                                dcc.Dropdown(
-                                                    id='id-dropdown-locations',
-                                                    multi=True,
-                                                    persistence=True,
-                                                    persistence_type='local'
-                                                ),
-                                                dbc.Label("Stats"),
-                                                dbc.RadioItems(
-                                                    id='id-select-case-type',
-                                                    options=[
-                                                        {'label': 'Confirmed', 'value': 'Confirmed'},
-                                                        {'label': 'Deaths', 'value': 'Deaths'},
-                                                        {'label': 'Recovered', 'value': 'Recovered'},
-                                                    ],
-                                                    value='Confirmed',
-                                                    inline=True
-                                                ),
-                                            ]
-                                        )
-                                    ],
-                                ),
-                                dcc.Graph(
-                                    id='id-chart-world',
-                                    config=dict(displayModeBar=False),
-                                    style={'width': '75vw'}
-                                )
-                            ]
-                        )
-                    ]
-                )
-            ]
-        )
-    )

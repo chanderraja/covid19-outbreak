@@ -1,11 +1,6 @@
 import os
-import dash_html_components as html
-import dash_core_components as dcc
-import dash_admin_components as dac
-import covid_data as data
 from covid_data import CovidDataProcessor, SCOPE_USA, SCOPE_US_COUNTIES
 from covid_data import CSSE_DAILY_COL_CONFIRMED, CSSE_DAILY_COL_FIPS, CSSE_DAILY_COL_HOVERTEXT
-from tab_common import get_status_boxes
 from plotutils import get_choropleth_mapbox
 
 

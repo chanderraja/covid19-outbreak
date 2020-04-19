@@ -245,7 +245,8 @@ class CovidDataProcessor:
         sum = df.aggregate('sum')
         df_sum = pd.DataFrame([sum], index=[sum_index])
         df = pd.concat([df_sum, df], sort=False)
-        return df, sum
+        df1_transposed = df.transpose()
+        return df1_transposed, sum
 
     def __read_csse_time_series_reports(self):
         drop_columns_global = lambda df: df.drop(
@@ -435,7 +436,8 @@ class CovidDataProcessor:
         if stat not in stat_map:
             self.logger.error(f'No data found for stat={stat} under scope={scope}')
             return None
-        return stat_map[stat]
+        df = stat_map[stat]
+        return df
 
     def get_df_daily_report(self, scope):
         """
@@ -460,3 +462,15 @@ class CovidDataProcessor:
         df = self.get_df_daily_report(scope).nlargest(n=n, columns=[stat])
         df.set_index(add_location(df), inplace=True)
         return df
+
+def get_scopes():
+    return [SCOPE_WORLD, SCOPE_USA, SCOPE_US_COUNTIES]
+
+def get_location_overall(scope):
+    if scope == SCOPE_WORLD:
+        return LOC_WORLD_OVERALL
+    elif scope == SCOPE_USA:
+        return LOC_USA_OVERALL
+    elif scope == SCOPE_US_COUNTIES:
+        return LOC_USA_OVERALL
+    return 'Not implemented'
