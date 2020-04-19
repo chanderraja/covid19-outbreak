@@ -133,7 +133,8 @@ def get_stat_card(scope, stat):
                         id=button_id,
                         children=[
                             stat,
-                            dbc.Badge(f'{dataproc.get_total_stat(scope, stat):,}', color='light', className="ml-1")
+                            dbc.Badge(f'{dataproc.get_total_stat(scope, stat):,}', color='light', className="ml-1"),
+                            f'\u21e7'
                         ], size='lg', color=stat_to_color_map.get(stat)
                     )
                 ], width=2)
@@ -160,17 +161,60 @@ def get_stat_charts_ui(scope):
     ]
     return ui
 
+
+dbc.Label(f'Select Scope'),
+
+scope_selector = dbc.Row(
+    [
+        dbc.Col(
+            dcc.Dropdown(
+                id=ID_DROPDOWN_SCOPE,
+                options=[{'label': i, 'value': i} for i in get_scopes()],
+                value=[SCOPE_WORLD],
+                clearable=False,
+                persistence=True,
+            ), width=4
+        )
+    ],
+    no_gutters=True,
+    className="ml-auto flex-nowrap mt-3 mt-md-0",
+    align="center",
+)
+
+dashboard = dbc.Navbar(
+    [
+        dbc.Col(dbc.NavbarBrand("Dashboard", href="#"), sm=3, md=6),
+        dbc.Col(
+            dbc.Nav(dbc.NavItem(dbc.NavLink('Select Scope')), navbar=True),
+            width="auto",
+        ),
+        dbc.Col(
+            dcc.Dropdown(
+                id=ID_DROPDOWN_SCOPE,
+                options=[{'label': i, 'value': i} for i in get_scopes()],
+                value=[SCOPE_WORLD],
+                clearable=False,
+                persistence=True,
+            )
+        ),
+    ],
+    color='primary',
+    dark=True,
+)
+
+
 def serve_layout():
     scope = SCOPE_WORLD
     layout = dbc.Container(
         [
-            html.H1("My Dashboard"),
-            html.Hr(),
-            dbc.Row(
-                [
-                    dbc.Col(get_scope_selector(), lg=12),
-                ]
-            ),
+            dashboard,
+            #html.H1("My Dashboard"),
+            #html.Hr(),
+            #dbc.Row(
+            #    [
+            #        dbc.Col(get_scope_selector(), lg=12),
+            #    ]
+            #),
             html.Hr(),
             dbc.Row(
                 [
@@ -190,6 +234,19 @@ def serve_layout():
 
 
 app.layout = serve_layout
+
+search_bar = dbc.Row(
+    [
+        dbc.Col(dbc.Input(type="search", placeholder="Search")),
+        dbc.Col(
+            dbc.Button("Search", color="primary", className="ml-2"),
+            width="auto",
+        ),
+    ],
+    no_gutters=True,
+    className="ml-auto flex-nowrap mt-3 mt-md-0",
+    align="center",
+)
 
 @app.callback(
     Output(ID_MAPBOX, 'figure'),
