@@ -49,20 +49,6 @@ def get_map(scope):
         return None
     return map
 
-def get_scope_selector():
-    return dbc.FormGroup(
-        [
-            dbc.Label(f'Select Scope'),
-            dcc.Dropdown(
-                id=ID_DROPDOWN_SCOPE,
-                options=[{'label': i, 'value': i} for i in get_scopes()],
-                value=[SCOPE_WORLD],
-                persistence=True
-            )
-        ]
-    )
-
-
 def get_location_options(scope):
     df = dataproc.get_stat_by_date_df(scope, STAT_CONFIRMED)
     options = [{'label': i, 'value': i} for i in df.columns]
@@ -125,6 +111,13 @@ def get_stat_card(scope, stat):
         figure=get_top_locations_bar_chart(dataproc.get_top_locations(scope, stat, 10), stat)
     )
     chart = dcc.Loading(dbc.Row([dbc.Col(time_chart_obj), dbc.Col(top_n_chart_obj)]))
+
+    value, diff, pct_change = dataproc.get_latest_stat(stat, scope)
+    arrow = f'\u21e7'
+    if diff < 0:
+        arrow = f'\u21e9'
+    formatted_diff = f'{arrow} ({diff:+.0f}, {pct_change:+.2f}%)'
+
     return dbc.Card([
         dbc.CardHeader([
             dbc.Row([
@@ -133,8 +126,8 @@ def get_stat_card(scope, stat):
                         id=button_id,
                         children=[
                             stat,
-                            dbc.Badge(f'{dataproc.get_total_stat(scope, stat):,}', color='light', className="ml-1"),
-                            f'\u21e7'
+                            dbc.Badge(f'{value:,}', color='light', className="ml-1"),
+                            formatted_diff
                         ], size='lg', color=stat_to_color_map.get(stat)
                     )
                 ], width=2)
@@ -164,41 +157,24 @@ def get_stat_charts_ui(scope):
 
 dbc.Label(f'Select Scope'),
 
-scope_selector = dbc.Row(
+dashboard = dbc.Navbar(
     [
+        dbc.Col(dbc.NavbarBrand("Dashboard", href="#"), sm=3, md=4),
+        dbc.Col(
+            dbc.Nav(dbc.NavItem(dbc.NavLink('Select Scope')), navbar=True),
+            width='auto',
+        ),
         dbc.Col(
             dcc.Dropdown(
                 id=ID_DROPDOWN_SCOPE,
                 options=[{'label': i, 'value': i} for i in get_scopes()],
-                value=[SCOPE_WORLD],
+                value=SCOPE_WORLD,
                 clearable=False,
                 persistence=True,
             ), width=4
-        )
-    ],
-    no_gutters=True,
-    className="ml-auto flex-nowrap mt-3 mt-md-0",
-    align="center",
-)
-
-dashboard = dbc.Navbar(
-    [
-        dbc.Col(dbc.NavbarBrand("Dashboard", href="#"), sm=3, md=6),
-        dbc.Col(
-            dbc.Nav(dbc.NavItem(dbc.NavLink('Select Scope')), navbar=True),
-            width="auto",
-        ),
-        dbc.Col(
-            dcc.Dropdown(
-                id=ID_DROPDOWN_SCOPE,
-                options=[{'label': i, 'value': i} for i in get_scopes()],
-                value=[SCOPE_WORLD],
-                clearable=False,
-                persistence=True,
-            )
         ),
     ],
-    color='primary',
+    color='light',
     dark=True,
 )
 

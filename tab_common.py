@@ -26,12 +26,12 @@ def get_top_locations_bar_chart(df, stat, n=10, logger=None):
             autosize=True))
     return figure
 
-def get_time_series_scatter_chart(df, locations=None, diff=False, title=None, logger=None):
+def get_time_series_scatter_chart(df, locations=None, diff=True, title=None, logger=None):
     if df is None:
         return dict(data=dict())
     if diff is True:
-        df = df.diff()
-    x_list = [pd.to_datetime(d).date() for d in df.index]
+        df = df.pct_change()
+    x_list = [d.date() for d in df.index]
     data = []
     if locations is not None and isinstance(locations, list):
         for loc in locations:

@@ -1,5 +1,6 @@
 import pandas as pd
 import datetime as dt
+from dateutil import parser
 import os
 import logging
 import json
@@ -246,6 +247,7 @@ class CovidDataProcessor:
         df_sum = pd.DataFrame([sum], index=[sum_index])
         df = pd.concat([df_sum, df], sort=False)
         df1_transposed = df.transpose()
+        df1_transposed.index = pd.to_datetime(df1_transposed.index)
         return df1_transposed, sum
 
     def __read_csse_time_series_reports(self):
@@ -438,6 +440,25 @@ class CovidDataProcessor:
             return None
         df = stat_map[stat]
         return df
+
+    def get_latest_stat(self, stat, scope, loc=None):
+        """
+
+        :param scope:
+        :param location:
+        :return:
+        """
+        df = self.get_stat_by_date_df(scope, stat)
+        df_diff = df.diff()
+        df_pct_change = df.pct_change()
+        latest_date = df.index.max()
+        if loc is None:
+            loc = get_location_overall(scope)
+        value = df.loc[latest_date, loc]
+        pct_change = df_pct_change.loc[latest_date, loc] * 100
+        diff = df_diff.loc[latest_date, loc]
+        return value, diff, pct_change
+
 
     def get_df_daily_report(self, scope):
         """
