@@ -20,9 +20,10 @@ def get_top_locations_bar_chart(df, stat, n=10, logger=None):
     figure = dict(
         data=data,
         layout=dict(
-            title='Top 10',
+            title=f'top {n} trending',
+            height=600,
             xaxis = dict(tickangle = 45),
-            margin = dict(b = 160),
+            margin = dict(b = 100),
             autosize=True))
     return figure
 
@@ -43,6 +44,7 @@ def get_time_series_scatter_chart(df, locations=None, diff=True, title=None, log
                                name=loc))
     layout = go.Layout(
         title=title,
+        height=600,
         plot_bgcolor='rgba(240,240,255,100)',
         legend=dict(
             x=0.05,

@@ -22,6 +22,7 @@ server = app.server
 
 # widget IDS
 MAX_COMPARE_LOCS=5
+NUM_LOCATIONS_TRENDING=10
 ID_DROPDOWN_SCOPE='id-dropdown-scope'
 ID_DROPDOWN_LOC='id-dropdown-loc'
 ID_COLLAPSE_LOC='id-collapse-loc'
@@ -57,7 +58,8 @@ def get_location_options(scope):
 def get_location_selector(scope):
     return dbc.Collapse(
         [
-            dbc.FormGroup(
+            dbc.Card(
+                dbc.CardHeader(
                 [
                     dbc.Label(f'Select up to {MAX_COMPARE_LOCS} locations to compare'),
                     dcc.Dropdown(
@@ -68,19 +70,21 @@ def get_location_selector(scope):
                         persistence=True
                     ),
                     html.Br(),
-                    dbc.Row([
-                        dbc.Col(dbc.Button(
-                            f'Click here to select the {MAX_COMPARE_LOCS} locations with most confirmed cases',
-                            id=ID_BUTTON_SELECT_TOP_CONFIRMED,
-                            size='sm'
-                        )),
-                        dbc.Col(dbc.Button(
-                            f'Click here to compare the the {MAX_COMPARE_LOCS} locations with most deaths',
-                            id=ID_BUTTON_SELECT_TOP_DEATHS,
-                            size='sm'
-                        )),
-                    ]),
-                ]
+                    dbc.Button(
+                        f'Click here to select the {MAX_COMPARE_LOCS} locations with most confirmed cases',
+                        id=ID_BUTTON_SELECT_TOP_CONFIRMED,
+                        size='lg',
+                        color='primary',
+                        block=True
+                    ),
+                    dbc.Button(
+                        f'Click here to compare the the {MAX_COMPARE_LOCS} locations with most deaths',
+                        id=ID_BUTTON_SELECT_TOP_DEATHS,
+                        size='lg',
+                        color='primary',
+                        block=True
+                    )
+                ])
             )
         ],
         id=ID_COLLAPSE_LOC
@@ -108,7 +112,7 @@ def get_stat_card(scope, stat):
     time_chart_obj = dcc.Graph(id=get_stat_over_time_chart_id(stat))
     top_n_chart_obj = dcc.Graph(
         id=get_top_n_chart_id(stat),
-        figure=get_top_locations_bar_chart(dataproc.get_top_locations(scope, stat, 10), stat)
+        figure=get_top_locations_bar_chart(dataproc.get_top_locations(scope, stat, n=NUM_LOCATIONS_TRENDING), stat)
     )
     chart = dcc.Loading(dbc.Row([dbc.Col(time_chart_obj), dbc.Col(top_n_chart_obj)]))
 
@@ -116,8 +120,28 @@ def get_stat_card(scope, stat):
     arrow = f'\u21e7'
     if diff < 0:
         arrow = f'\u21e9'
-    formatted_diff = f'{arrow} ({diff:+.0f}, {pct_change:+.2f}%)'
+    formatted_value = f'{value:,} {stat}'
 
+    formatted_diff = f'{arrow} ({diff:+.0f}, {pct_change:+.2f}% during the past 24 hrs)'
+
+    return dbc.Card([
+        dbc.CardHeader(
+            dbc.Alert(
+                dbc.Row([
+                    dbc.Col([
+                        html.H4(f'{formatted_value}', className='alert-heading'),
+                        html.P(f'{formatted_diff}'),
+                    ], width=10),
+                    dbc.Col([
+                        dbc.Button('Expand', id=button_id)
+                    ], width=2, align='end')
+                ]),  color=stat_to_color_map.get(stat)
+            ),
+        ),
+        dbc.Collapse(dbc.CardBody([chart]), id=collapse_id, is_open=False)
+    ])
+
+'''
     return dbc.Card([
         dbc.CardHeader([
             dbc.Row([
@@ -125,9 +149,8 @@ def get_stat_card(scope, stat):
                     dbc.Button(
                         id=button_id,
                         children=[
-                            stat,
-                            dbc.Badge(f'{value:,}', color='light', className="ml-1"),
-                            formatted_diff
+                            f'{stat.ljust(20)}{value:,}{formatted_diff}'
+                            #dbc.Badge(f'{value:,}', color='light', className="ml-1"),
                         ], size='lg', color=stat_to_color_map.get(stat)
                     )
                 ], width=2)
@@ -135,7 +158,7 @@ def get_stat_card(scope, stat):
         ]),
         dbc.Collapse(dbc.CardBody([chart]), id=collapse_id, is_open=False)
     ])
-
+'''
 def get_stat_charts_ui(scope):
     ui =    \
     [
@@ -293,7 +316,7 @@ def process_by_date_charts(locations, is_open, scope):
     stat = get_stat_from_collapse_id(collapse_id)
     if is_open:
         return [get_time_series_scatter_chart(dataproc.get_stat_by_date_df(scope, stat), locations),
-                get_top_locations_bar_chart(dataproc.get_top_locations(scope, stat, n=20), stat)]
+                get_top_locations_bar_chart(dataproc.get_top_locations(scope, stat, n=NUM_LOCATIONS_TRENDING), stat)]
     else:
         raise PreventUpdate
 
