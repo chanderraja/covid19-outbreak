@@ -1,9 +1,4 @@
-import pandas as pd
 import plotly.graph_objects as go
-import dash_html_components as html
-import dash_admin_components as dac
-import dash_core_components as dcc
-from plotutils import get_choropleth_mapbox
 
 def get_top_locations_bar_chart(df, stat, n=10, logger=None):
     if df is None:

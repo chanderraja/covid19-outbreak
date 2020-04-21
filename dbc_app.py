@@ -28,6 +28,9 @@ ID_DROPDOWN_LOC='id-dropdown-loc'
 ID_COLLAPSE_LOC='id-collapse-loc'
 ID_BUTTON_SELECT_TOP_CONFIRMED= 'id-button-select-top-confirmed'
 ID_BUTTON_SELECT_TOP_DEATHS= 'id-button-select-top-deaths'
+ID_STAT_HEADER_COL_CONFIRMED='id-stat-col-confirmed'
+ID_STAT_HEADER_COL_DEATHS='id-stat-col-deaths'
+ID_STAT_HEADER_COL_RECOVERED='id-stat-col-recovered'
 ID_MAPBOX='id-mapbox'
 
 dataproc = CovidDataProcessor()
@@ -71,14 +74,14 @@ def get_location_selector(scope):
                     ),
                     html.Br(),
                     dbc.Button(
-                        f'Click here to select the {MAX_COMPARE_LOCS} locations with most confirmed cases',
+                        f'Click here to compare the top {MAX_COMPARE_LOCS} locations for Covid-19 confirmed cases',
                         id=ID_BUTTON_SELECT_TOP_CONFIRMED,
                         size='lg',
                         color='primary',
                         block=True
                     ),
                     dbc.Button(
-                        f'Click here to compare the the {MAX_COMPARE_LOCS} locations with most deaths',
+                        f'Click here to compare the top {MAX_COMPARE_LOCS} locations for Covid-19 deaths',
                         id=ID_BUTTON_SELECT_TOP_DEATHS,
                         size='lg',
                         color='primary',
@@ -106,6 +109,32 @@ def get_stat_over_time_chart_id(stat):
 def get_top_n_chart_id(stat):
     return f'id-stat-top-n-chart-{stat}'
 
+stat_header_col_id_to_stat_map = {
+    ID_STAT_HEADER_COL_CONFIRMED: STAT_CONFIRMED,
+    ID_STAT_HEADER_COL_DEATHS: STAT_DEATHS,
+    ID_STAT_HEADER_COL_RECOVERED: STAT_RECOVERED
+}
+
+# make reverse lookup as well
+stat_to_stat_header_col_id_map = {}
+for id in stat_header_col_id_to_stat_map:
+    stat = stat_header_col_id_to_stat_map[id]
+    stat_to_stat_header_col_id_map[stat] = id
+
+def get_stat_header_col_text(scope, stat):
+    value, diff, pct_change = dataproc.get_latest_stat(stat, scope)
+    arrow = f'\u21e7'
+    if diff < 0:
+        arrow = f'\u21e9'
+    formatted_value = f'{value:,} {stat}'
+    formatted_diff = f'{arrow} ({diff:+.0f}, {pct_change:+.2f}% past 24 hrs)'
+    return [
+        html.H4(f'{formatted_value}', className='alert-heading'),
+        html.P(f'{formatted_diff}'),
+    ]
+
+
+
 def get_stat_card(scope, stat):
     button_id = get_stat_button_id(stat)
     collapse_id = get_stat_collapse_id(stat)
@@ -122,16 +151,14 @@ def get_stat_card(scope, stat):
         arrow = f'\u21e9'
     formatted_value = f'{value:,} {stat}'
 
-    formatted_diff = f'{arrow} ({diff:+.0f}, {pct_change:+.2f}% during the past 24 hrs)'
+    formatted_diff = f'{arrow} ({diff:+.0f}, {pct_change:+.2f}% past 24 hrs)'
 
     return dbc.Card([
         dbc.CardHeader(
             dbc.Alert(
                 dbc.Row([
-                    dbc.Col([
-                        html.H4(f'{formatted_value}', className='alert-heading'),
-                        html.P(f'{formatted_diff}'),
-                    ], width=10),
+                    dbc.Col(children=get_stat_header_col_text(scope, stat), id=stat_to_stat_header_col_id_map[stat], width=4),
+                    dbc.Col(width=6),
                     dbc.Col([
                         dbc.Button('Expand', id=button_id)
                     ], width=2, align='end')
@@ -141,24 +168,7 @@ def get_stat_card(scope, stat):
         dbc.Collapse(dbc.CardBody([chart]), id=collapse_id, is_open=False)
     ])
 
-'''
-    return dbc.Card([
-        dbc.CardHeader([
-            dbc.Row([
-                dbc.Col([
-                    dbc.Button(
-                        id=button_id,
-                        children=[
-                            f'{stat.ljust(20)}{value:,}{formatted_diff}'
-                            #dbc.Badge(f'{value:,}', color='light', className="ml-1"),
-                        ], size='lg', color=stat_to_color_map.get(stat)
-                    )
-                ], width=2)
-            ])
-        ]),
-        dbc.Collapse(dbc.CardBody([chart]), id=collapse_id, is_open=False)
-    ])
-'''
+
 def get_stat_charts_ui(scope):
     ui =    \
     [
@@ -198,7 +208,7 @@ dashboard = dbc.Navbar(
         ),
     ],
     color='light',
-    dark=True,
+    light=True,
 )
 
 
@@ -207,26 +217,13 @@ def serve_layout():
     layout = dbc.Container(
         [
             dashboard,
-            #html.H1("My Dashboard"),
-            #html.Hr(),
-            #dbc.Row(
-            #    [
-            #        dbc.Col(get_scope_selector(), lg=12),
-            #    ]
-            #),
             html.Hr(),
-            dbc.Row(
-                [
-                    dbc.Col(get_stat_charts_ui(scope), lg=12),
-                ]
-            ),
-            dbc.Row(
-                [
-                    dbc.Col(dbc.Card([dcc.Graph(id=ID_MAPBOX, figure=get_map(scope))]), lg=12),
-                ],
-                align='center',
-                justify='center'
-            ),
+            dbc.Row([
+                dbc.Col(get_stat_charts_ui(scope), lg=12)
+            ]),
+            dbc.Row([
+                dbc.Col(dbc.Card([dcc.Loading(dcc.Graph(id=ID_MAPBOX, figure=get_map(scope)))]), lg=12),
+            ], align='center', justify='center'),
         ], fluid=True,
     )
     return layout
@@ -291,6 +288,20 @@ def register_location_dropdown_options_callback():
     app.callback(outputs, inputs)(process_location_dropdown_options)
 
 register_location_dropdown_options_callback()
+
+def stat_header_callback(scope):
+    ctx = dash.callback_context
+    output_id = ctx.outputs_list['id']
+    stat = stat_header_col_id_to_stat_map[output_id]
+    return get_stat_header_col_text(scope, stat)
+
+def register_stat_header_col_update_callback(stat):
+    output = Output(stat_to_stat_header_col_id_map[stat], 'children')
+    inputs = [Input(ID_DROPDOWN_SCOPE, 'value')]
+    app.callback(output, inputs)(stat_header_callback)
+
+for stat in supported_stats:
+    register_stat_header_col_update_callback(stat)
 
 @app.callback(
     Output(ID_DROPDOWN_LOC, 'value'),
