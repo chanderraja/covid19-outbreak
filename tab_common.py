@@ -1,8 +1,5 @@
 import plotly.graph_objects as go
-
-RATE_NONE=0
-RATE_DIFF=1
-RATE_PERCENTAGE=2
+from covid_data import VALUE_TYPE_CUMULATIVE, VALUE_TYPE_DAILY_DIFF, VALUE_TYPE_DAILY_PERCENT_CHANGE
 
 def get_top_locations_bar_chart(df, stat, n=10, logger=None):
     if df is None:
@@ -26,12 +23,12 @@ def get_top_locations_bar_chart(df, stat, n=10, logger=None):
             autosize=True))
     return figure
 
-def get_time_series_scatter_chart(df, locations=None, show_rate=RATE_NONE, title=None, logger=None):
+def get_time_series_scatter_chart(df, locations=None, value_type=VALUE_TYPE_CUMULATIVE, title=None, logger=None):
     if df is None:
         return dict(data=dict())
-    if show_rate == RATE_DIFF:
+    if value_type == VALUE_TYPE_DAILY_DIFF:
         df = df.diff()
-    elif show_rate == RATE_PERCENTAGE:
+    elif value_type == VALUE_TYPE_DAILY_PERCENT_CHANGE:
         df = df.pct_change()
     x_list = [d.date() for d in df.index]
     data = []

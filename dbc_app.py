@@ -8,6 +8,8 @@ from covid_data import CovidDataProcessor, SCOPE_WORLD, SCOPE_USA, SCOPE_US_COUN
 from covid_data import get_scopes, get_location_overall
 from covid_data import STAT_CONFIRMED, STAT_DEATHS, STAT_RECOVERED, STAT_ACTIVE
 from tab_common import get_time_series_scatter_chart, get_top_locations_bar_chart
+from tab_common import VALUE_TYPE_CUMULATIVE, VALUE_TYPE_DAILY_DIFF, VALUE_TYPE_DAILY_PERCENT_CHANGE
+
 from tab_world import get_choropleth_mapbox_world
 from tab_usa import get_choropleth_mapbox_usa
 from tab_us_counties import get_choropleth_mapbox_us_counties
@@ -17,7 +19,7 @@ supported_stats = [STAT_CONFIRMED, STAT_DEATHS]
 # =============================================================================
 # Dash App and Flask Server
 # =============================================================================
-app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
+app = dash.Dash(__name__, external_stylesheets=[dbc.themes.FLATLY])
 server = app.server
 
 # widget IDS
@@ -28,9 +30,10 @@ ID_DROPDOWN_LOC='id-dropdown-loc'
 ID_COLLAPSE_LOC='id-collapse-loc'
 ID_BUTTON_SELECT_TOP_CONFIRMED= 'id-button-select-top-confirmed'
 ID_BUTTON_SELECT_TOP_DEATHS= 'id-button-select-top-deaths'
-ID_STAT_HEADER_COL_CONFIRMED= 'id-stat-col1-confirmed'
-ID_STAT_HEADER_COL_DEATHS= 'id-stat-col1-deaths'
-ID_STAT_HEADER_COL_RECOVERED= 'id-stat-col1-recovered'
+ID_RADIOITEMS_TIMECHART_SETTINGS='id-radioitems-timechart-settings'
+ID_STAT_HEADER_COL_CONFIRMED= 'id-stat-col-confirmed'
+ID_STAT_HEADER_COL_DEATHS= 'id-stat-col-deaths'
+ID_STAT_HEADER_COL_RECOVERED= 'id-stat-col-recovered'
 ID_MAPBOX='id-mapbox'
 
 stat_header_col_id_to_stat_map = {
@@ -73,7 +76,7 @@ def get_location_options(scope):
     options = [{'label': i, 'value': i} for i in df.columns]
     return options
 
-def get_location_selector(scope):
+def get_chart_controls(scope):
     return dbc.Collapse(
         [
             dbc.Card(
@@ -101,7 +104,23 @@ def get_location_selector(scope):
                         size='lg',
                         color='primary',
                         block=True
-                    )
+                    ),
+                    html.Br(),
+                    dbc.FormGroup([
+                        dbc.Label('Time Chart Settings'),
+                        dcc.RadioItems(
+                            id=ID_RADIOITEMS_TIMECHART_SETTINGS,
+                            options=[
+                                dict(label='Cumulative', value=VALUE_TYPE_CUMULATIVE),
+                                dict(label='Daily change (absolute)', value=VALUE_TYPE_DAILY_DIFF),
+                                dict(label='Daily change (percentage)', value=VALUE_TYPE_DAILY_PERCENT_CHANGE)
+                            ],
+                            value = VALUE_TYPE_CUMULATIVE,
+                            labelStyle={'display': 'block'},
+                            inputStyle={'margin-right': '5px'},
+                            persistence=True
+                        )
+                    ])
                 ])
             )
         ],
@@ -127,41 +146,46 @@ def get_top_n_chart_id(stat):
 
 def get_stat_header_col_text(scope, stat):
     # get overall stats
-    cols = []
     value, diff, pct_change = dataproc.get_latest_stat(stat, scope)
     diff_arrow = lambda diff: f'\u21e7' if diff > 0 else f'\u21e9'
     arrow = diff_arrow(diff)
     formatted_value = f'{value:,} {stat}'
-    formatted_diff = f'{arrow} ({diff:+.0f}, {pct_change:+.2f}% past 24 hrs)'
-    cols.append(dbc.Col([
-        html.H4(f'{formatted_value}', className='alert-heading'),
-        html.P(f'{formatted_diff}'),
-    ]))
+    formatted_diff = f'{diff:+,.0f} ({pct_change:+.2f}%) {arrow} past 24h'
+    col1 = dbc.Col([
+        html.H2(f'{formatted_value}', className='alert-heading'),
+        html.H4(f'{formatted_diff}'),
+    ], width=4)
     # add 2 rows per col, max 2 cols
     rows_per_col = 1
     max_cols = 6
     n = rows_per_col * max_cols
     df = dataproc.get_top_locations(scope, stat, n)
     locs = list(df.index)
-    col = []
+
+    textlist = []
     num_cols = 0
     num_rows = 0
+    col2_subcols = []
     for loc in locs:
         value, diff, pct_change = dataproc.get_latest_stat(stat, scope, loc=loc)
         arrow = diff_arrow(diff)
         formatted_loc = f'{loc}'
-        formatted_diff = f'{value:,} {arrow} ({diff:+.0f}, {pct_change:+.2f}%)'
-        col.append(html.H6(formatted_loc))
-        col.append(html.P(formatted_diff))
+        formatted_value = f'{value:,}'
+        formatted_diff = f'{diff:+,.0f} ({pct_change:+.2f}%) {arrow}'
+        textlist.append(html.H6(formatted_loc))
+        textlist.append(html.H6(formatted_value))
+        textlist.append(html.P(formatted_diff))
         num_rows += 1
         if num_rows == rows_per_col:
-            cols.append(dbc.Col([x for x  in col]))
-            col.clear()
+            col2_subcols.append(dbc.Col([x for x  in textlist]))
+            textlist.clear()
             num_rows = 0
             num_cols += 1
             if num_cols == max_cols:
                 break
-    return dbc.Row(cols)
+
+    col2 = dbc.Col(dbc.Row(col2_subcols))
+    return dbc.Row([col1, col2])
 
 def get_stat_card(scope, stat):
     button_id = get_stat_button_id(stat)
@@ -171,16 +195,16 @@ def get_stat_card(scope, stat):
         id=get_top_n_chart_id(stat),
         figure=get_top_locations_bar_chart(dataproc.get_top_locations(scope, stat, n=NUM_LOCATIONS_TRENDING), stat)
     )
-    chart = dcc.Loading(dbc.Row([dbc.Col(time_chart_obj), dbc.Col(top_n_chart_obj)]))
+    chart = dcc.Loading(dbc.Row([dbc.Col(time_chart_obj, sm=12, lg=6), dbc.Col(top_n_chart_obj, sm=12, lg=6)]))
 
     return dbc.Card([
         dbc.CardHeader(
             dbc.Alert(
                 dbc.Row([
-                    dcc.Loading(dbc.Col(id=stat_to_stat_header_col_id_map[stat], width=10)),
+                    dbc.Col(id=stat_to_stat_header_col_id_map[stat], width=11),
                     dbc.Col([
                         dbc.Button('Expand', id=button_id)
-                    ], width=2, align='end')
+                    ], align='end')
                 ]),  color=stat_to_color_map.get(stat)
             ),
         ),
@@ -192,7 +216,7 @@ def get_stat_charts_ui(scope):
     ui =    \
     [
         dbc.Row([
-            dbc.Col(get_location_selector(scope))],
+            dbc.Col(get_chart_controls(scope))],
             align='center',
             justify='left'
         )
@@ -340,13 +364,13 @@ def select_top_locations_button_callback(sel_top_confirmed, sel_top_deaths, scop
     return [locs]
 
 
-def process_by_date_charts(locations, is_open, scope):
+def process_by_date_charts(locations, value_type, is_open, scope):
     ctx = dash.callback_context
     inputs = list(ctx.inputs)
-    collapse_id = inputs[1].split('.')[0]
+    collapse_id = inputs[2].split('.')[0]
     stat = get_stat_from_collapse_id(collapse_id)
     if is_open:
-        return [get_time_series_scatter_chart(dataproc.get_stat_by_date_df(scope, stat), locations),
+        return [get_time_series_scatter_chart(dataproc.get_stat_by_date_df(scope, stat), locations, value_type=value_type),
                 get_top_locations_bar_chart(dataproc.get_top_locations(scope, stat, n=NUM_LOCATIONS_TRENDING), stat)]
     else:
         raise PreventUpdate
@@ -355,6 +379,7 @@ def register_by_date_charts_callback(stat):
     outputs = [Output(get_stat_over_time_chart_id(stat), 'figure'),
                Output(get_top_n_chart_id(stat), 'figure')]
     inputs = [Input(ID_DROPDOWN_LOC, 'value')]
+    inputs += [Input(ID_RADIOITEMS_TIMECHART_SETTINGS, 'value')]
     inputs += [Input(get_stat_collapse_id(stat), 'is_open')]
     inputs += [Input(ID_DROPDOWN_SCOPE, 'value')]
     app.callback(outputs, inputs)(process_by_date_charts)
