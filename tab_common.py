@@ -6,7 +6,7 @@ def get_top_locations_bar_chart(df, stat, n=10, logger=None):
         return dict(data=dict())
     data = []
     x_axis = df.index
-    y_axis = df[stat]
+    y_axis = df
     data.append(
         dict(name=df.index,
              x=x_axis,
@@ -16,7 +16,7 @@ def get_top_locations_bar_chart(df, stat, n=10, logger=None):
     figure = dict(
         data=data,
         layout=dict(
-            title=f'top {n} trending',
+            title=f'Trending',
             height=600,
             xaxis = dict(tickangle = 45),
             margin = dict(b = 100),

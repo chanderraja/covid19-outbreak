@@ -66,6 +66,15 @@ def get_stat_types():
 def get_scope_types():
     return [SCOPE_WORLD, SCOPE_USA, SCOPE_US_COUNTIES]
 
+def get_location_overall(scope):
+    if scope == SCOPE_WORLD:
+        return LOC_WORLD_OVERALL
+    elif scope == SCOPE_USA:
+        return LOC_USA_OVERALL
+    elif scope == SCOPE_US_COUNTIES:
+        return LOC_USA_OVERALL
+    return 'Not implemented'
+
 def get_value_types():
     return [VALUE_TYPE_CUMULATIVE, VALUE_TYPE_DAILY_DIFF, VALUE_TYPE_DAILY_PERCENT_CHANGE]
 
@@ -79,7 +88,7 @@ def compute_df_for_value_types(df):
     d = dict()
     d[VALUE_TYPE_CUMULATIVE] = df
     d[VALUE_TYPE_DAILY_DIFF] = df.diff()
-    d[VALUE_TYPE_DAILY_PERCENT_CHANGE] = df.pct_change()
+    d[VALUE_TYPE_DAILY_PERCENT_CHANGE] = df.pct_change() * 100
     return d
 
 
@@ -498,10 +507,11 @@ class CovidDataProcessor:
         else:
             return None
 
-    def get_top_locations(self, scope, stat, n=10):
-        df = self.get_df_daily_report(scope).nlargest(n=n, columns=[stat])
-        df.set_index(add_location(df), inplace=True)
-        return df
+    def get_top_locations(self, scope, stat, value_type=VALUE_TYPE_CUMULATIVE, n=10):
+        df = self.get_stat_by_date_df(scope, stat, value_type)
+        latest_date = df.index.max()
+        latest_series = df.loc[latest_date]
+        return latest_series.nlargest(n=n)
 
     def get_bottom_locations(self, scope, stat, n=10):
         df = self.get_df_daily_report(scope)
@@ -511,15 +521,3 @@ class CovidDataProcessor:
         df1.set_index(add_location(df1), inplace=True)
         return df1
 
-
-def get_scopes():
-    return [SCOPE_WORLD, SCOPE_USA, SCOPE_US_COUNTIES]
-
-def get_location_overall(scope):
-    if scope == SCOPE_WORLD:
-        return LOC_WORLD_OVERALL
-    elif scope == SCOPE_USA:
-        return LOC_USA_OVERALL
-    elif scope == SCOPE_US_COUNTIES:
-        return LOC_USA_OVERALL
-    return 'Not implemented'

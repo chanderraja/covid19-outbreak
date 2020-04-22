@@ -5,7 +5,7 @@ import dash_core_components as dcc
 import dash_bootstrap_components as dbc
 from dash.exceptions import PreventUpdate
 from covid_data import CovidDataProcessor, SCOPE_WORLD, SCOPE_USA, SCOPE_US_COUNTIES
-from covid_data import get_scopes, get_location_overall
+from covid_data import get_scope_types, get_location_overall
 from covid_data import STAT_CONFIRMED, STAT_DEATHS, STAT_RECOVERED, STAT_ACTIVE
 from tab_common import get_time_series_scatter_chart, get_top_locations_bar_chart
 from tab_common import VALUE_TYPE_CUMULATIVE, VALUE_TYPE_DAILY_DIFF, VALUE_TYPE_DAILY_PERCENT_CHANGE
@@ -144,7 +144,7 @@ def get_top_n_chart_id(stat):
     return f'id-stat-top-n-chart-{stat}'
 
 
-def get_stat_header_col_text(scope, stat):
+def get_stat_header_col_text(scope, stat, value_type=VALUE_TYPE_CUMULATIVE):
     # get overall stats
     value, diff, pct_change = dataproc.get_latest_stat(stat, scope)
     diff_arrow = lambda diff: f'\u21e7' if diff > 0 else f'\u21e9'
@@ -159,7 +159,7 @@ def get_stat_header_col_text(scope, stat):
     rows_per_col = 1
     max_cols = 6
     n = rows_per_col * max_cols
-    df = dataproc.get_top_locations(scope, stat, n)
+    df = dataproc.get_top_locations(scope, stat, value_type=value_type, n=n)
     locs = list(df.index)
 
     textlist = []
@@ -187,13 +187,13 @@ def get_stat_header_col_text(scope, stat):
     col2 = dbc.Col(dbc.Row(col2_subcols))
     return dbc.Row([col1, col2])
 
-def get_stat_card(scope, stat):
+def get_stat_card(scope, stat, value_type=VALUE_TYPE_CUMULATIVE):
     button_id = get_stat_button_id(stat)
     collapse_id = get_stat_collapse_id(stat)
     time_chart_obj = dcc.Graph(id=get_stat_over_time_chart_id(stat))
     top_n_chart_obj = dcc.Graph(
         id=get_top_n_chart_id(stat),
-        figure=get_top_locations_bar_chart(dataproc.get_top_locations(scope, stat, n=NUM_LOCATIONS_TRENDING), stat)
+        figure=get_top_locations_bar_chart(dataproc.get_top_locations(scope, stat, value_type=value_type, n=NUM_LOCATIONS_TRENDING), stat)
     )
     chart = dcc.Loading(dbc.Row([dbc.Col(time_chart_obj, sm=12, lg=6), dbc.Col(top_n_chart_obj, sm=12, lg=6)]))
 
@@ -212,7 +212,7 @@ def get_stat_card(scope, stat):
     ])
 
 
-def get_stat_charts_ui(scope):
+def get_stat_charts_ui(scope, value_type=VALUE_TYPE_CUMULATIVE):
     ui =    \
     [
         dbc.Row([
@@ -222,11 +222,11 @@ def get_stat_charts_ui(scope):
         )
     ]
 
-    cols = lambda scope, stat: dbc.Col(get_stat_card(scope, stat))
+    cols = lambda scope, stat, value_type: dbc.Col(get_stat_card(scope, stat, value_type))
 
     ui += \
     [
-        dbc.Row(cols(scope, x), justify='left') for x in supported_stats
+        dbc.Row(cols(scope, x, value_type), justify='left') for x in supported_stats
     ]
     return ui
 
@@ -243,7 +243,7 @@ dashboard = dbc.Navbar(
         dbc.Col(
             dcc.Dropdown(
                 id=ID_DROPDOWN_SCOPE,
-                options=[{'label': i, 'value': i} for i in get_scopes()],
+                options=[{'label': i, 'value': i} for i in get_scope_types()],
                 value=SCOPE_WORLD,
                 clearable=False,
                 persistence=True,
@@ -264,11 +264,9 @@ def serve_layout():
             dbc.Row([
                 dbc.Col(get_stat_charts_ui(scope), lg=12)
             ]),
-            '''
             dbc.Row([
                 dbc.Col(dbc.Card([dcc.Loading(dcc.Graph(id=ID_MAPBOX, figure=get_map(scope)))]), lg=12),
             ], align='center', justify='center'),
-            '''
         ], fluid=True,
     )
     return layout
@@ -348,10 +346,11 @@ register_location_dropdown_options_callback()
     [Output(ID_DROPDOWN_LOC, 'value')],
     [Input(ID_BUTTON_SELECT_TOP_CONFIRMED, 'n_clicks'),
      Input(ID_BUTTON_SELECT_TOP_DEATHS, 'n_clicks'),
-     Input(ID_DROPDOWN_SCOPE, 'value')],
+     Input(ID_DROPDOWN_SCOPE, 'value'),
+     Input(ID_RADIOITEMS_TIMECHART_SETTINGS, 'value')],
     [State(ID_DROPDOWN_LOC, 'value')]
 )
-def select_top_locations_button_callback(sel_top_confirmed, sel_top_deaths, scope, locs):
+def select_top_locations_button_callback(sel_top_confirmed, sel_top_deaths, scope, value_type, locs):
     #if not sel_top_confirmed and not sel_top_deaths:
     #    raise PreventUpdate
     ctx = dash.callback_context
@@ -359,7 +358,7 @@ def select_top_locations_button_callback(sel_top_confirmed, sel_top_deaths, scop
     stat = STAT_CONFIRMED
     if input == ID_BUTTON_SELECT_TOP_DEATHS:
         stat = STAT_DEATHS
-    df = dataproc.get_top_locations(scope, stat, n=MAX_COMPARE_LOCS)
+    df = dataproc.get_top_locations(scope, stat, value_type=value_type, n=MAX_COMPARE_LOCS)
     locs = list(df.index)
     return [locs]
 
@@ -370,8 +369,8 @@ def process_by_date_charts(locations, value_type, is_open, scope):
     collapse_id = inputs[2].split('.')[0]
     stat = get_stat_from_collapse_id(collapse_id)
     if is_open:
-        return [get_time_series_scatter_chart(dataproc.get_stat_by_date_df(scope, stat), locations, value_type=value_type),
-                get_top_locations_bar_chart(dataproc.get_top_locations(scope, stat, n=NUM_LOCATIONS_TRENDING), stat)]
+        return [get_time_series_scatter_chart(dataproc.get_stat_by_date_df(scope, stat, value_type=value_type), locations),
+                get_top_locations_bar_chart(dataproc.get_top_locations(scope, stat, value_type=value_type, n=NUM_LOCATIONS_TRENDING), stat)]
     else:
         raise PreventUpdate
 
