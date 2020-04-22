@@ -31,12 +31,6 @@ ID_BUTTON_SELECT_TOP_DEATHS= 'id-button-select-top-deaths'
 ID_STAT_HEADER_COL_CONFIRMED= 'id-stat-col1-confirmed'
 ID_STAT_HEADER_COL_DEATHS= 'id-stat-col1-deaths'
 ID_STAT_HEADER_COL_RECOVERED= 'id-stat-col1-recovered'
-ID_STAT_HEADER_COL2_CONFIRMED= 'id-stat-col2-confirmed'
-ID_STAT_HEADER_COL2_DEATHS= 'id-stat-col2-deaths'
-ID_STAT_HEADER_COL2_RECOVERED= 'id-stat-col2-recovered'
-ID_STAT_HEADER_COL3_CONFIRMED= 'id-stat-col3-confirmed'
-ID_STAT_HEADER_COL3_DEATHS= 'id-stat-col3-deaths'
-ID_STAT_HEADER_COL3_RECOVERED= 'id-stat-col3-recovered'
 ID_MAPBOX='id-mapbox'
 
 stat_header_col_id_to_stat_map = {
@@ -95,14 +89,14 @@ def get_location_selector(scope):
                     ),
                     html.Br(),
                     dbc.Button(
-                        f'Click here to compare the top {MAX_COMPARE_LOCS} locations for Covid-19 confirmed cases',
+                        f'Click to compare the top {MAX_COMPARE_LOCS} locations for Covid-19 confirmed cases',
                         id=ID_BUTTON_SELECT_TOP_CONFIRMED,
                         size='lg',
                         color='primary',
                         block=True
                     ),
                     dbc.Button(
-                        f'Click here to compare the top {MAX_COMPARE_LOCS} locations for Covid-19 deaths',
+                        f'Click to compare the top {MAX_COMPARE_LOCS} locations for Covid-19 deaths',
                         id=ID_BUTTON_SELECT_TOP_DEATHS,
                         size='lg',
                         color='primary',
@@ -183,7 +177,7 @@ def get_stat_card(scope, stat):
         dbc.CardHeader(
             dbc.Alert(
                 dbc.Row([
-                    dbc.Col(id=stat_to_stat_header_col_id_map[stat], width=10),
+                    dcc.Loading(dbc.Col(id=stat_to_stat_header_col_id_map[stat], width=10)),
                     dbc.Col([
                         dbc.Button('Expand', id=button_id)
                     ], width=2, align='end')
