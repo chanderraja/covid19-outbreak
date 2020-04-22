@@ -1,6 +1,5 @@
 import pandas as pd
 import datetime as dt
-from dateutil import parser
 import os
 import logging
 import json
@@ -338,7 +337,7 @@ class CovidDataProcessor:
                 url=csse_timeseries_deaths_usa_csv,
                 dropcolumns_func=drop_columns_usa,
                 aggregate_func=aggregate_sums_usa,
-                logtext='USA time series confirmed cases',
+                logtext='USA time series deaths',
                 sum_index = LOC_USA_OVERALL
             )
 
@@ -367,7 +366,7 @@ class CovidDataProcessor:
             self.__get_csse_time_series_data(
                 url=csse_timeseries_confirmed_usa_csv,
                 dropcolumns_func=drop_columns_us_counties,
-                logtext='US time series confirmed cases',
+                logtext='US counties time series confirmed cases',
                 sum_index = LOC_USA_OVERALL,
                 set_index = CSSE_TIMESERIES_COL_USA_COMBINED_KEY
         )
@@ -376,9 +375,9 @@ class CovidDataProcessor:
 
         self.df_deaths_by_date_us_counties, self.deaths_totals_us_counties = \
             self.__get_csse_time_series_data(
-                url=csse_timeseries_confirmed_usa_csv,
+                url=csse_timeseries_deaths_usa_csv,
                 dropcolumns_func=drop_columns_us_counties,
-                logtext='US time series confirmed cases',
+                logtext='US counties time series deaths',
                 sum_index = LOC_USA_OVERALL,
                 set_index=CSSE_TIMESERIES_COL_USA_COMBINED_KEY
         )
@@ -407,22 +406,6 @@ class CovidDataProcessor:
             return self.geojson_us_counties
         else:
             return None
-
-    def get_total_stat(self, scope, stat):
-        """
-        :param scope: SCOPE_WORLD or other defined scope
-        :param stat: stat to return (STAT_CONFIRMED, STAT_DEATHS etc)
-        :return: total current tally of requested stat (e.g. confirmed, deaths etc)
-        """
-        if stat not in self.csse_daily_stat_to_col_map:
-            self.logger.error(f'Invalid stat {stat} passed')
-            return None
-        column = self.csse_daily_stat_to_col_map[stat]
-        if scope not in self.scope_to_totals_map:
-            self.logger.error(f'Invalid scope {scope} passed')
-            return None
-        totals = self.scope_to_totals_map[scope]
-        return totals.get(column)
 
     def get_stat_by_date_df(self, scope, stat):
         """

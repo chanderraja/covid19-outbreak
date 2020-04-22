@@ -12,7 +12,7 @@ from tab_world import get_choropleth_mapbox_world
 from tab_usa import get_choropleth_mapbox_usa
 from tab_us_counties import get_choropleth_mapbox_us_counties
 
-supported_stats = [STAT_CONFIRMED, STAT_DEATHS, STAT_RECOVERED]
+supported_stats = [STAT_CONFIRMED, STAT_DEATHS]
 
 # =============================================================================
 # Dash App and Flask Server
@@ -28,10 +28,31 @@ ID_DROPDOWN_LOC='id-dropdown-loc'
 ID_COLLAPSE_LOC='id-collapse-loc'
 ID_BUTTON_SELECT_TOP_CONFIRMED= 'id-button-select-top-confirmed'
 ID_BUTTON_SELECT_TOP_DEATHS= 'id-button-select-top-deaths'
-ID_STAT_HEADER_COL_CONFIRMED='id-stat-col-confirmed'
-ID_STAT_HEADER_COL_DEATHS='id-stat-col-deaths'
-ID_STAT_HEADER_COL_RECOVERED='id-stat-col-recovered'
+ID_STAT_HEADER_COL_CONFIRMED= 'id-stat-col1-confirmed'
+ID_STAT_HEADER_COL_DEATHS= 'id-stat-col1-deaths'
+ID_STAT_HEADER_COL_RECOVERED= 'id-stat-col1-recovered'
+ID_STAT_HEADER_COL2_CONFIRMED= 'id-stat-col2-confirmed'
+ID_STAT_HEADER_COL2_DEATHS= 'id-stat-col2-deaths'
+ID_STAT_HEADER_COL2_RECOVERED= 'id-stat-col2-recovered'
+ID_STAT_HEADER_COL3_CONFIRMED= 'id-stat-col3-confirmed'
+ID_STAT_HEADER_COL3_DEATHS= 'id-stat-col3-deaths'
+ID_STAT_HEADER_COL3_RECOVERED= 'id-stat-col3-recovered'
 ID_MAPBOX='id-mapbox'
+
+stat_header_col_id_to_stat_map = {
+    ID_STAT_HEADER_COL_CONFIRMED: STAT_CONFIRMED,
+    ID_STAT_HEADER_COL_DEATHS: STAT_DEATHS,
+    ID_STAT_HEADER_COL_RECOVERED: STAT_RECOVERED
+}
+def make_reverse_lookup(fwd_lookup):
+    rev_lookup = {}
+    for key in fwd_lookup:
+        val = fwd_lookup[key]
+        rev_lookup[val] = key
+    return rev_lookup
+
+# make reverse lookups
+stat_to_stat_header_col_id_map = make_reverse_lookup(stat_header_col_id_to_stat_map)
 
 dataproc = CovidDataProcessor()
 
@@ -109,31 +130,46 @@ def get_stat_over_time_chart_id(stat):
 def get_top_n_chart_id(stat):
     return f'id-stat-top-n-chart-{stat}'
 
-stat_header_col_id_to_stat_map = {
-    ID_STAT_HEADER_COL_CONFIRMED: STAT_CONFIRMED,
-    ID_STAT_HEADER_COL_DEATHS: STAT_DEATHS,
-    ID_STAT_HEADER_COL_RECOVERED: STAT_RECOVERED
-}
-
-# make reverse lookup as well
-stat_to_stat_header_col_id_map = {}
-for id in stat_header_col_id_to_stat_map:
-    stat = stat_header_col_id_to_stat_map[id]
-    stat_to_stat_header_col_id_map[stat] = id
 
 def get_stat_header_col_text(scope, stat):
+    # get overall stats
+    cols = []
     value, diff, pct_change = dataproc.get_latest_stat(stat, scope)
-    arrow = f'\u21e7'
-    if diff < 0:
-        arrow = f'\u21e9'
+    diff_arrow = lambda diff: f'\u21e7' if diff > 0 else f'\u21e9'
+    arrow = diff_arrow(diff)
     formatted_value = f'{value:,} {stat}'
     formatted_diff = f'{arrow} ({diff:+.0f}, {pct_change:+.2f}% past 24 hrs)'
-    return [
+    cols.append(dbc.Col([
         html.H4(f'{formatted_value}', className='alert-heading'),
         html.P(f'{formatted_diff}'),
-    ]
-
-
+    ]))
+    n = 4
+    df = dataproc.get_top_locations(scope, stat, n)
+    locs = list(df.index)
+    # add 2 rows per col, max 2 cols
+    rows_per_col = 2
+    max_cols = 2
+    col = []
+    num_cols = 0
+    num_rows = 0
+    for loc in locs:
+        value, diff, pct_change = dataproc.get_latest_stat(stat, scope, loc=loc)
+        arrow = f'\u21e7'
+        if diff < 0:
+            arrow = f'\u21e9'
+        formatted_loc = f'{loc}'
+        formatted_diff = f'{value:,} {arrow} ({diff:+.0f}, {pct_change:+.2f}%)'
+        col.append(html.H6(formatted_loc))
+        col.append(html.P(formatted_diff))
+        num_rows += 1
+        if num_rows == 2:
+            cols.append(dbc.Col([x for x  in col]))
+            col.clear()
+            num_rows = 0
+            num_cols += 1
+            if num_cols == max_cols:
+                break
+    return dbc.Row(cols)
 
 def get_stat_card(scope, stat):
     button_id = get_stat_button_id(stat)
@@ -145,20 +181,11 @@ def get_stat_card(scope, stat):
     )
     chart = dcc.Loading(dbc.Row([dbc.Col(time_chart_obj), dbc.Col(top_n_chart_obj)]))
 
-    value, diff, pct_change = dataproc.get_latest_stat(stat, scope)
-    arrow = f'\u21e7'
-    if diff < 0:
-        arrow = f'\u21e9'
-    formatted_value = f'{value:,} {stat}'
-
-    formatted_diff = f'{arrow} ({diff:+.0f}, {pct_change:+.2f}% past 24 hrs)'
-
     return dbc.Card([
         dbc.CardHeader(
             dbc.Alert(
                 dbc.Row([
-                    dbc.Col(children=get_stat_header_col_text(scope, stat), id=stat_to_stat_header_col_id_map[stat], width=4),
-                    dbc.Col(width=6),
+                    dbc.Col(id=stat_to_stat_header_col_id_map[stat], width=10),
                     dbc.Col([
                         dbc.Button('Expand', id=button_id)
                     ], width=2, align='end')
@@ -221,9 +248,11 @@ def serve_layout():
             dbc.Row([
                 dbc.Col(get_stat_charts_ui(scope), lg=12)
             ]),
+            '''
             dbc.Row([
                 dbc.Col(dbc.Card([dcc.Loading(dcc.Graph(id=ID_MAPBOX, figure=get_map(scope)))]), lg=12),
             ], align='center', justify='center'),
+            '''
         ], fluid=True,
     )
     return layout
@@ -244,12 +273,21 @@ search_bar = dbc.Row(
     align="center",
 )
 
-@app.callback(
-    Output(ID_MAPBOX, 'figure'),
-    [Input(ID_DROPDOWN_SCOPE, 'value')]
-)
-def map_callback(scope):
-    return get_map(scope)
+
+def stat_header_callback(scope):
+    ctx = dash.callback_context
+    output_id = ctx.outputs_list['id']
+    stat = stat_header_col_id_to_stat_map[output_id]
+    return get_stat_header_col_text(scope, stat)
+
+def register_stat_header_col_update_callback(stat):
+    output = Output(stat_to_stat_header_col_id_map[stat], 'children')
+    inputs = [Input(ID_DROPDOWN_SCOPE, 'value')]
+    app.callback(output, inputs)(stat_header_callback)
+
+for stat in supported_stats:
+    register_stat_header_col_update_callback(stat)
+
 
 def toggle_collapse_callback(n, is_open):
     if n:
@@ -289,35 +327,25 @@ def register_location_dropdown_options_callback():
 
 register_location_dropdown_options_callback()
 
-def stat_header_callback(scope):
-    ctx = dash.callback_context
-    output_id = ctx.outputs_list['id']
-    stat = stat_header_col_id_to_stat_map[output_id]
-    return get_stat_header_col_text(scope, stat)
-
-def register_stat_header_col_update_callback(stat):
-    output = Output(stat_to_stat_header_col_id_map[stat], 'children')
-    inputs = [Input(ID_DROPDOWN_SCOPE, 'value')]
-    app.callback(output, inputs)(stat_header_callback)
-
-for stat in supported_stats:
-    register_stat_header_col_update_callback(stat)
 
 @app.callback(
-    Output(ID_DROPDOWN_LOC, 'value'),
+    [Output(ID_DROPDOWN_LOC, 'value')],
     [Input(ID_BUTTON_SELECT_TOP_CONFIRMED, 'n_clicks'),
      Input(ID_BUTTON_SELECT_TOP_DEATHS, 'n_clicks'),
-     Input(ID_DROPDOWN_SCOPE, 'value')]
+     Input(ID_DROPDOWN_SCOPE, 'value')],
+    [State(ID_DROPDOWN_LOC, 'value')]
 )
-def select_top_locations_button_callback(sel_top_confirmed, sel_top_deaths, scope):
-    if not sel_top_confirmed and not sel_top_deaths:
-        raise PreventUpdate
+def select_top_locations_button_callback(sel_top_confirmed, sel_top_deaths, scope, locs):
+    #if not sel_top_confirmed and not sel_top_deaths:
+    #    raise PreventUpdate
     ctx = dash.callback_context
     input = ctx.triggered[0]['prop_id'].split('.')[0]
-    stat = STAT_CONFIRMED if input == ID_BUTTON_SELECT_TOP_CONFIRMED else STAT_DEATHS
+    stat = STAT_CONFIRMED
+    if input == ID_BUTTON_SELECT_TOP_DEATHS:
+        stat = STAT_DEATHS
     df = dataproc.get_top_locations(scope, stat, n=MAX_COMPARE_LOCS)
     locs = list(df.index)
-    return locs
+    return [locs]
 
 
 def process_by_date_charts(locations, is_open, scope):
@@ -341,6 +369,14 @@ def register_by_date_charts_callback(stat):
 
 for s in supported_stats:
     register_by_date_charts_callback(s)
+
+@app.callback(
+    Output(ID_MAPBOX, 'figure'),
+    [Input(ID_DROPDOWN_SCOPE, 'value')]
+)
+def map_callback(scope):
+    return get_map(scope)
+
 
 if __name__ == '__main__':
     app.run_server(debug=False, port=8888)
