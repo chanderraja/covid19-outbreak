@@ -143,26 +143,24 @@ def get_stat_header_col_text(scope, stat):
         html.H4(f'{formatted_value}', className='alert-heading'),
         html.P(f'{formatted_diff}'),
     ]))
-    n = 4
+    # add 2 rows per col, max 2 cols
+    rows_per_col = 1
+    max_cols = 6
+    n = rows_per_col * max_cols
     df = dataproc.get_top_locations(scope, stat, n)
     locs = list(df.index)
-    # add 2 rows per col, max 2 cols
-    rows_per_col = 2
-    max_cols = 2
     col = []
     num_cols = 0
     num_rows = 0
     for loc in locs:
         value, diff, pct_change = dataproc.get_latest_stat(stat, scope, loc=loc)
-        arrow = f'\u21e7'
-        if diff < 0:
-            arrow = f'\u21e9'
+        arrow = diff_arrow(diff)
         formatted_loc = f'{loc}'
         formatted_diff = f'{value:,} {arrow} ({diff:+.0f}, {pct_change:+.2f}%)'
         col.append(html.H6(formatted_loc))
         col.append(html.P(formatted_diff))
         num_rows += 1
-        if num_rows == 2:
+        if num_rows == rows_per_col:
             cols.append(dbc.Col([x for x  in col]))
             col.clear()
             num_rows = 0
@@ -288,14 +286,14 @@ def register_stat_header_col_update_callback(stat):
 for stat in supported_stats:
     register_stat_header_col_update_callback(stat)
 
-
 def toggle_collapse_callback(n, is_open):
+    button_text = lambda open: 'collapse' if open else 'expand'
     if n:
-        return not is_open
-    return is_open
+        return [not is_open, button_text(not is_open)]
+    return [is_open, button_text(is_open)]
 
 def register_stat_collapse_callback(stat):
-    output = Output(get_stat_collapse_id(stat), 'is_open')
+    output = [Output(get_stat_collapse_id(stat), 'is_open'), Output(get_stat_button_id(stat), 'children')]
     inputs = [Input(get_stat_button_id(stat), 'n_clicks')]
     states = [State(get_stat_collapse_id(stat), 'is_open')]
     app.callback(output, inputs, states)(toggle_collapse_callback)

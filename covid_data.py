@@ -467,6 +467,15 @@ class CovidDataProcessor:
         df.set_index(add_location(df), inplace=True)
         return df
 
+    def get_bottom_locations(self, scope, stat, n=10):
+        df = self.get_df_daily_report(scope)
+        df1 = df.dropna()
+        df1 = df1.nsmallest(n=n, columns=[stat])
+
+        df1.set_index(add_location(df1), inplace=True)
+        return df1
+
+
 def get_scopes():
     return [SCOPE_WORLD, SCOPE_USA, SCOPE_US_COUNTIES]
 
