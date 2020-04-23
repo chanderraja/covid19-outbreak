@@ -127,6 +127,10 @@ class CovidDataProcessor:
     __geojson_us_states_url = './data/us_states_500k_res.json'
     __geojson_us_counties_url = './data/us_counties_500k_res.json'
 
+    __population_world_url = './data/world_population.csv'
+    __population_us_states_url = './data/us_states_population.csv'
+    __population_us_counties_url = './data/us_counties_population.csv'
+
     rename_countries = {
         'Bahamas': 'The Bahamas',
         'Burma': 'Myanmar',
@@ -223,6 +227,11 @@ class CovidDataProcessor:
                     self.logger.warning(f'{country} not found in dataset')
                 continue
 
+    def __read_population_data(self):
+        self.df_pop_world = pd.read_csv(self.__population_world_url)
+        self.df_pop_us_states = pd.read_csv(self.__population_us_states_url)
+        self.df_pop_us_counties = pd.read_csv(self.__population_us_counties_url)
+
     def __read_csse_daily_report(self):
         csse_daily_csv = self.__csse_daily_url + self.__today_str + '.csv'
         if not os.path.isfile(csse_daily_csv):
@@ -270,6 +279,7 @@ class CovidDataProcessor:
         self.usa_totals = self.df_daily_us_counties.aggregate(self.daily_aggregation_functions)
         self.scope_to_totals_map[SCOPE_USA] = self.usa_totals
         self.scope_to_totals_map[SCOPE_US_COUNTIES] = self.usa_totals
+
 
     def __get_csse_time_series_data(self, url, set_index=None, sum_index='Total', dropcolumns_func=None, aggregate_func=None, logtext=None, rename_countries=False):
         if logtext is not None:
@@ -443,6 +453,7 @@ class CovidDataProcessor:
         self.__read_world_countries_geojson()
         self.__read_us_states_geojson()
         self.__read_us_counties_geojson()
+        self.__read_population_data()
         self.__read_csse_daily_report()
         self.__read_csse_time_series_reports()
         pass
