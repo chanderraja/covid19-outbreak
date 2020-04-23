@@ -165,7 +165,7 @@ class CovidDataProcessor:
 
     scope_to_totals_map = {}
 
-    scope_and_stat_to_by_date_df_map = {
+    time_series_by_location_lookup = {
         SCOPE_WORLD: {},
         SCOPE_USA: {},
         SCOPE_US_COUNTIES: {}
@@ -182,11 +182,14 @@ class CovidDataProcessor:
         ch.setFormatter(formatter)
         # add the handlers to logger
         self.logger.addHandler(ch)
-        self.scope_and_stat_to_by_date_df_map = dict()
+        self.time_series_by_location_lookup = dict()
+        self.time_series_by_overall_lookup = dict()
         for scope in get_scope_types():
-            self.scope_and_stat_to_by_date_df_map[scope] = dict()
+            self.time_series_by_location_lookup[scope] = dict()
+            self.time_series_by_overall_lookup[scope] = dict()
             for stat in get_stat_types():
-                self.scope_and_stat_to_by_date_df_map[scope][stat] = dict()
+                self.time_series_by_location_lookup[scope][stat] = dict()
+                self.time_series_by_overall_lookup[scope][stat] = dict()
 
     def __read_world_countries_geojson(self):
         with open(self.__geojson_world_countries_url) as f:
@@ -285,10 +288,12 @@ class CovidDataProcessor:
             df.sort_index(inplace=True)
         sum = df.aggregate('sum')
         df_sum = pd.DataFrame([sum], index=[sum_index])
-        df = pd.concat([df_sum, df], sort=False)
+        df_sum = df_sum.transpose()
+        df_sum.index = pd.to_datetime(df_sum.index)
+        #df = pd.concat([df_sum, df], sort=False)
         df1_transposed = df.transpose()
         df1_transposed.index = pd.to_datetime(df1_transposed.index)
-        return df1_transposed, sum
+        return df1_transposed, df_sum
 
     def __read_csse_time_series_reports(self):
         drop_columns_global = lambda df: df.drop(
@@ -315,7 +320,8 @@ class CovidDataProcessor:
                 sum_index=LOC_WORLD_OVERALL
             )
 
-        self.scope_and_stat_to_by_date_df_map[SCOPE_WORLD][STAT_CONFIRMED] = compute_df_for_value_types(self.df_confirmed_by_date_world)
+        self.time_series_by_location_lookup[SCOPE_WORLD][STAT_CONFIRMED] = compute_df_for_value_types(self.df_confirmed_by_date_world)
+        self.time_series_by_overall_lookup[SCOPE_WORLD][STAT_CONFIRMED] = compute_df_for_value_types(self.confirmed_totals_global)
 
         self.df_deaths_by_date_world, self.deaths_totals_global = \
             self.__get_csse_time_series_data(
@@ -327,7 +333,8 @@ class CovidDataProcessor:
                 sum_index = LOC_WORLD_OVERALL
         )
 
-        self.scope_and_stat_to_by_date_df_map[SCOPE_WORLD][STAT_DEATHS] = compute_df_for_value_types(self.df_deaths_by_date_world)
+        self.time_series_by_location_lookup[SCOPE_WORLD][STAT_DEATHS] = compute_df_for_value_types(self.df_deaths_by_date_world)
+        self.time_series_by_overall_lookup[SCOPE_WORLD][STAT_DEATHS] = compute_df_for_value_types(self.deaths_totals_global)
 
         self.df_recovered_by_date_world, self.recovered_totals_global = \
             self.__get_csse_time_series_data(
@@ -339,7 +346,8 @@ class CovidDataProcessor:
                 sum_index = LOC_WORLD_OVERALL
         )
 
-        self.scope_and_stat_to_by_date_df_map[SCOPE_WORLD][STAT_RECOVERED] = compute_df_for_value_types(self.df_recovered_by_date_world)
+        self.time_series_by_location_lookup[SCOPE_WORLD][STAT_RECOVERED] = compute_df_for_value_types(self.df_recovered_by_date_world)
+        self.time_series_by_overall_lookup[SCOPE_WORLD][STAT_RECOVERED] = compute_df_for_value_types(self.recovered_totals_global)
 
 
         csse_timeseries_confirmed_usa_csv = self.__csse_timeseries_url + 'time_series_covid19_confirmed_US.csv'
@@ -371,7 +379,8 @@ class CovidDataProcessor:
                 sum_index = LOC_USA_OVERALL
         )
 
-        self.scope_and_stat_to_by_date_df_map[SCOPE_USA][STAT_CONFIRMED] = compute_df_for_value_types(self.df_confirmed_by_date_usa)
+        self.time_series_by_location_lookup[SCOPE_USA][STAT_CONFIRMED] = compute_df_for_value_types(self.df_confirmed_by_date_usa)
+        self.time_series_by_overall_lookup[SCOPE_USA][STAT_CONFIRMED] = compute_df_for_value_types(self.confirmed_totals_usa)
 
         self.df_deaths_by_date_usa, self.deaths_totals_usa = \
             self.__get_csse_time_series_data(
@@ -382,7 +391,8 @@ class CovidDataProcessor:
                 sum_index = LOC_USA_OVERALL
             )
 
-        self.scope_and_stat_to_by_date_df_map[SCOPE_USA][STAT_DEATHS] = compute_df_for_value_types(self.df_deaths_by_date_usa)
+        self.time_series_by_location_lookup[SCOPE_USA][STAT_DEATHS] = compute_df_for_value_types(self.df_deaths_by_date_usa)
+        self.time_series_by_overall_lookup[SCOPE_USA][STAT_DEATHS] = compute_df_for_value_types(self.deaths_totals_usa)
 
         drop_columns_us_counties = lambda df: df.drop(
             columns=[
@@ -412,7 +422,8 @@ class CovidDataProcessor:
                 set_index = CSSE_TIMESERIES_COL_USA_COMBINED_KEY
         )
 
-        self.scope_and_stat_to_by_date_df_map[SCOPE_US_COUNTIES][STAT_CONFIRMED] = compute_df_for_value_types(self.df_confirmed_by_date_us_counties)
+        self.time_series_by_location_lookup[SCOPE_US_COUNTIES][STAT_CONFIRMED] = compute_df_for_value_types(self.df_confirmed_by_date_us_counties)
+        self.time_series_by_overall_lookup[SCOPE_US_COUNTIES][STAT_CONFIRMED] = compute_df_for_value_types(self.confirmed_totals_us_counties)
 
         self.df_deaths_by_date_us_counties, self.deaths_totals_us_counties = \
             self.__get_csse_time_series_data(
@@ -423,8 +434,9 @@ class CovidDataProcessor:
                 set_index=CSSE_TIMESERIES_COL_USA_COMBINED_KEY
         )
 
-        self.scope_and_stat_to_by_date_df_map[SCOPE_US_COUNTIES][STAT_DEATHS] = compute_df_for_value_types(self.df_deaths_by_date_us_counties)
-        pass
+        self.time_series_by_location_lookup[SCOPE_US_COUNTIES][STAT_DEATHS] = compute_df_for_value_types(self.df_deaths_by_date_us_counties)
+        self.time_series_by_overall_lookup[SCOPE_US_COUNTIES][STAT_DEATHS] = compute_df_for_value_types(self.deaths_totals_us_counties)
+
 
     def __init__(self, *args, **kwargs):
         self.__init_logger()
@@ -448,17 +460,18 @@ class CovidDataProcessor:
         else:
             return None
 
-    def get_stat_by_date_df(self, scope, stat, value_type=VALUE_TYPE_CUMULATIVE):
+    def get_stat_by_date_df(self, scope, stat, value_type=VALUE_TYPE_CUMULATIVE, overall=False):
         """
         return dataframe containing stat by date
         :param scope: SCOPE_WORLD or other defined scope
         :param stat: stat to return in dataframe (STAT_CONFIRMED, STAT_DEATHS etc)
         :return: dataframe containing requested stats per location (defined by scope) by date
         """
-        if scope not in self.scope_and_stat_to_by_date_df_map:
+        lookup = self.time_series_by_location_lookup if overall is False else self.time_series_by_overall_lookup
+        if scope not in lookup:
             self.logger.error(f'No data available for scope={scope}')
             return None
-        stat_lookup = self.scope_and_stat_to_by_date_df_map[scope]
+        stat_lookup = lookup[scope]
         if stat not in stat_lookup:
             self.logger.error(f'No data found for stat={stat} under scope={scope}')
             return None
@@ -476,9 +489,9 @@ class CovidDataProcessor:
         :param location:
         :return:
         """
-        df = self.get_stat_by_date_df(scope, stat, VALUE_TYPE_CUMULATIVE)
-        df_diff = self.get_stat_by_date_df(scope, stat, VALUE_TYPE_DAILY_DIFF)
-        df_pct_change = self.get_stat_by_date_df(scope, stat, VALUE_TYPE_DAILY_PERCENT_CHANGE)
+        df = self.get_stat_by_date_df(scope, stat, VALUE_TYPE_CUMULATIVE, overall=(loc is None))
+        df_diff = self.get_stat_by_date_df(scope, stat, VALUE_TYPE_DAILY_DIFF, overall=(loc is None))
+        df_pct_change = self.get_stat_by_date_df(scope, stat, VALUE_TYPE_DAILY_PERCENT_CHANGE, overall=(loc is None))
         latest_date = df.index.max()
         if loc is None:
             loc = get_location_overall(scope)

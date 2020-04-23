@@ -118,9 +118,9 @@ def get_choropleth_mapbox(geojson, locations, z, hovertext,  mapbox_token,
             z=z if not logarithmic else np.log10(z),
             zmin=zmin,
             zmax=zmax,
-            marker_line_width=1,
+            marker_line_width=0,
             marker_line_color='white',
-            marker_opacity=0.8,
+            marker_opacity=0.5,
             text=hovertext,
             hoverinfo='text'))
 
@@ -128,12 +128,14 @@ def get_choropleth_mapbox(geojson, locations, z, hovertext,  mapbox_token,
 
     fig.update_layout(
         title=name,
-        mapbox_style='open-street-map',
-        mapbox_accesstoken=mapbox_token,
-        mapbox_zoom=2,
-        mapbox_center={"lat": 37.0902, "lon": -95.7129}
+        mapbox=dict(
+            style='streets',
+            accesstoken=mapbox_token,
+            zoom=2,
+            center={"lat": 37.0902, "lon": -95.7129}
+        )
     )
-    fig.update_layout(margin={"r": 0, "t": 0, "l": 0, "b": 0})
+    fig.update_layout(margin={"r": 10, "t": 10, "l": 10, "b": 10})
     return fig
 
 

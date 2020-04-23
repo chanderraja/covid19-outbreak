@@ -14,7 +14,7 @@ def get_choropleth_mapbox_world(dataproc: CovidDataProcessor, logger):
         country = feat['properties']['name']
         if country not in df.index:
             if logger is not None:
-                logger.warning(f'{country} not found in dataset')
+                logger.info(f'{country} not found in dataset')
             continue
         row = df.loc[country]
         if row[CSSE_DAILY_COL_CONFIRMED] != 0:
