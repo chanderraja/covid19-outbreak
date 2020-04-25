@@ -3,6 +3,7 @@ import datetime as dt
 import os
 import logging
 import json
+import numpy as np
 
 # Scope
 SCOPE_WORLD='Worldwide'         # worldwide scope indexed by countries
@@ -88,7 +89,9 @@ def compute_df_for_value_types(df):
     d = dict()
     d[VALUE_TYPE_CUMULATIVE] = df
     d[VALUE_TYPE_DAILY_DIFF] = df.diff()
-    d[VALUE_TYPE_DAILY_PERCENT_CHANGE] = df.pct_change() * 100
+    df1 = df.pct_change() * 100
+    df1 = df1.replace([np.inf, -np.inf], np.nan)
+    d[VALUE_TYPE_DAILY_PERCENT_CHANGE] = df1
     return d
 
 
@@ -116,10 +119,7 @@ add_location = lambda df: df.apply(lambda row: get_location(row), axis=1)
 
 
 class CovidDataProcessor:
-    __today_str = f'{dt.datetime.today():%m-%d-%Y}'
-    __yesterday_str = f'{dt.datetime.today() - dt.timedelta(days=1):%m-%d-%Y}'
-
-    __csse_base_url = './covid-19-data/csse_covid_19_data/'
+    __csse_base_url = './data/covid-19/csse_covid_19_data/'
     __csse_daily_url = __csse_base_url + 'csse_covid_19_daily_reports/'
     __csse_timeseries_url = __csse_base_url + 'csse_covid_19_time_series/'
 
@@ -233,12 +233,17 @@ class CovidDataProcessor:
         self.df_pop_us_counties = pd.read_csv(self.__population_us_counties_url)
 
     def __read_csse_daily_report(self):
-        csse_daily_csv = self.__csse_daily_url + self.__today_str + '.csv'
-        if not os.path.isfile(csse_daily_csv):
-            csse_daily_csv = self.__csse_daily_url + self.__yesterday_str + '.csv'
+
+        today = dt.datetime.today()
+        csse_daily_csv = ''
+        for i in range(0, 10):
+            date_str = f'{today - dt.timedelta(days=i):%m-%d-%Y}'
+            csse_daily_csv = self.__csse_daily_url + date_str + '.csv'
+            if os.path.isfile(csse_daily_csv):
+                break
+
         self.logger.info('Reading f{csse_daily_csv}...')
         df_daily_global = pd.read_csv(csse_daily_csv, dtype={CSSE_DAILY_COL_FIPS: str})
-
         self.__check_countries_in_province_field(df_daily_global)
 
         # make a world countries data frame
@@ -507,7 +512,7 @@ class CovidDataProcessor:
         if loc is None:
             loc = get_location_overall(scope)
         value = df.loc[latest_date, loc]
-        pct_change = df_pct_change.loc[latest_date, loc] * 100
+        pct_change = df_pct_change.loc[latest_date, loc]
         diff = df_diff.loc[latest_date, loc]
         return value, diff, pct_change
 

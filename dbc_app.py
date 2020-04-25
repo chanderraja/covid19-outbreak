@@ -331,10 +331,11 @@ def process_location_dropdown_options(locations, scope):
     options = get_location_options(scope)
     if len(locations) == MAX_COMPARE_LOCS:
         options = [x for x in options if x['value'] in locations]
-    return [options]
+    return [options, scope]
 
 def register_location_dropdown_options_callback():
-    outputs = [Output(ID_DROPDOWN_LOC, 'options')]
+    outputs = [Output(ID_DROPDOWN_LOC, 'options'),
+               Output(ID_DROPDOWN_LOC, 'persistence')]
     inputs = [Input(ID_DROPDOWN_LOC, 'value'),
               Input(ID_DROPDOWN_SCOPE, 'value')]
     app.callback(outputs, inputs)(process_location_dropdown_options)
