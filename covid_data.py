@@ -108,10 +108,10 @@ def get_location(row):
 
 def get_hovertext(row):
     return get_location(row) + '<br>' + \
-           'Confirmed = ' + str(row[CSSE_DAILY_COL_CONFIRMED]) + '<br>' + \
-           'Deaths = ' + str(row[CSSE_DAILY_COL_DEATHS]) + '<br>' + \
-           'Recovered =' + str(row[CSSE_DAILY_COL_RECOVERED]) + '<br>' + \
-           'Active =' + str(row[CSSE_DAILY_COL_ACTIVE])
+            f'{row[CSSE_DAILY_COL_CONFIRMED]:,} confirmed' + '<br>' + \
+            f'{row[CSSE_DAILY_COL_DEATHS]:,} deaths' + '<br>' + \
+            f'{row[CSSE_DAILY_COL_RECOVERED]:,} recovered' + '<br>' + \
+            f'{row[CSSE_DAILY_COL_ACTIVE]:,} active'
 
 
 add_hovertext = lambda df: df.apply(lambda row: get_hovertext(row), axis=1)
