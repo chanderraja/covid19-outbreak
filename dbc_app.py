@@ -26,8 +26,8 @@ server = app.server
 MAX_COMPARE_LOCS=5
 NUM_LOCATIONS_TRENDING=10
 ID_DROPDOWN_SCOPE='id-dropdown-scope'
-ID_DROPDOWN_LOC_PREFIX='id-dropdown-loc'
-ID_DROPDOWN_LOC_DIV=ID_DROPDOWN_LOC_PREFIX + '-div'
+ID_DROPDOWN_LOC= 'id-dropdown-loc'
+ID_DROPDOWN_LOC_DIV= ID_DROPDOWN_LOC + '-div'
 ID_COLLAPSE_LOC='id-collapse-loc'
 ID_BUTTON_SELECT_TOP_CONFIRMED= 'id-button-select-top-confirmed'
 ID_BUTTON_SELECT_TOP_DEATHS= 'id-button-select-top-deaths'
@@ -72,15 +72,9 @@ def get_map(scope):
         return None
     return map
 
-def get_id_location_dropdown(scope):
-    return ID_DROPDOWN_LOC_PREFIX + f'-{scope}'
-
-# get scope given dropdown id
-def get_scope_of_dropdown(id):
-    return id.lstrip(ID_DROPDOWN_LOC_PREFIX+'-')
 
 def get_location_options(scope):
-    df = dataproc.get_stat_by_date_df(scope, STAT_CONFIRMED)
+    df = dataproc.get_stat_by_date_df(scope, stat=STAT_CONFIRMED)
     options = [{'label': i, 'value': i} for i in df.columns]
     return options
 
@@ -91,22 +85,7 @@ def get_chart_controls(scope):
                 dbc.CardHeader(
                 [
                     dbc.Label(f'Select up to {MAX_COMPARE_LOCS} locations to compare'),
-                    html.Div(id=ID_DROPDOWN_LOC_DIV),
-                    html.Br(),
-                    dbc.Button(
-                        f'Click to compare the top {MAX_COMPARE_LOCS} locations for Covid-19 confirmed cases',
-                        id=ID_BUTTON_SELECT_TOP_CONFIRMED,
-                        size='lg',
-                        color='primary',
-                        block=True
-                    ),
-                    dbc.Button(
-                        f'Click to compare the top {MAX_COMPARE_LOCS} locations for Covid-19 deaths',
-                        id=ID_BUTTON_SELECT_TOP_DEATHS,
-                        size='lg',
-                        color='primary',
-                        block=True
-                    ),
+                    html.Div(dcc.Dropdown(id=ID_DROPDOWN_LOC), id=ID_DROPDOWN_LOC_DIV),
                     html.Br(),
                     dbc.FormGroup([
                         dbc.Label('Time Chart Settings'),
@@ -274,7 +253,7 @@ def serve_layout():
     return layout
 
 
-app.layout = serve_layout
+app.layout = serve_layout()
 
 search_bar = dbc.Row(
     [
@@ -331,42 +310,46 @@ register_collapse_controls_callback()
 
 @app.callback(
     Output(ID_DROPDOWN_LOC_DIV, 'children'),
-    [Input(ID_DROPDOWN_SCOPE, 'value')]
+    [Input(ID_DROPDOWN_SCOPE, 'value')],
+    [State(ID_RADIOITEMS_TIMECHART_SETTINGS, 'value')]
 )
-def show_dropdown(scope):
-    id_dropdown = get_id_location_dropdown(scope)
+def show_dropdown(scope, value_type):
+    locs = dataproc.get_all_locations(scope)
+    options = [{'label': v, 'value': v} for v in locs]
+    df = dataproc.get_top_locations(scope, stat, value_type=value_type, n=MAX_COMPARE_LOCS)
+    selected_locs = list(df.index)
     return dcc.Dropdown(
-        id=id_dropdown,
-        options=get_location_options(scope),
+        id=ID_DROPDOWN_LOC,
+        options=options,
+        value=selected_locs,
         multi=True,
-        persistence='local'
+        persistence_type='local',
+        persistence=scope
     )
 
+'''
 def process_location_dropdown_options(locations, scope):
     options = get_location_options(scope)
     if locations is not None and len(locations) == MAX_COMPARE_LOCS:
         options = [x for x in options if x['value'] in locations]
     return [options]
 
-def register_location_dropdown_options_callback(scope):
-    id_dropdown = get_id_location_dropdown(scope)
-    outputs = [Output(id_dropdown, 'options')]
-    inputs = [Input(id_dropdown, 'value'),
+def register_location_dropdown_options_callback():
+    outputs = [Output(ID_DROPDOWN_LOC, 'options')]
+    inputs = [Input(ID_DROPDOWN_LOC, 'value'),
               Input(ID_DROPDOWN_SCOPE, 'value')]
     app.callback(outputs, inputs)(process_location_dropdown_options)
 
-for scope in get_scope_types():
-    register_location_dropdown_options_callback(scope)
+register_location_dropdown_options_callback()
 
 
 def select_top_locations_button_callback(sel_top_confirmed, sel_top_deaths, scope, value_type):
     if not sel_top_confirmed and not sel_top_deaths:
         raise PreventUpdate
     ctx = dash.callback_context
-    output = ctx.outputs_list['id']
-    if get_scope_of_dropdown(output) != scope:
-        raise PreventUpdate
     triggered_input = ctx.triggered[0]['prop_id'].split('.')[0]
+    if triggered_input != ID_BUTTON_SELECT_TOP_CONFIRMED and triggered_input != ID_BUTTON_SELECT_TOP_DEATHS:
+        raise PreventUpdate
     stat = STAT_CONFIRMED
     if triggered_input == ID_BUTTON_SELECT_TOP_DEATHS:
         stat = STAT_DEATHS
@@ -374,9 +357,8 @@ def select_top_locations_button_callback(sel_top_confirmed, sel_top_deaths, scop
     locs = list(df.index)
     return locs
 
-def register_select_top_locations_callback(scope):
-    id_dropdown = get_id_location_dropdown(scope)
-    outputs = Output(id_dropdown, 'value')
+def register_select_top_locations_callback():
+    outputs = Output(ID_DROPDOWN_LOC, 'value')
     inputs =  [
         Input(ID_BUTTON_SELECT_TOP_CONFIRMED, 'n_clicks'),
         Input(ID_BUTTON_SELECT_TOP_DEATHS, 'n_clicks')]
@@ -385,22 +367,15 @@ def register_select_top_locations_callback(scope):
         State(ID_RADIOITEMS_TIMECHART_SETTINGS, 'value')]
     app.callback(outputs, inputs, states)(select_top_locations_button_callback)
 
-for scope in get_scope_types():
-    register_select_top_locations_callback(scope)
-
-
-
+register_select_top_locations_callback()
 '''
 def process_by_date_charts(locations, value_type, is_open, scope):
     ctx = dash.callback_context
     inputs = list(ctx.inputs)
     collapse_id = inputs[2].split('.')[0]
     stat = get_stat_from_collapse_id(collapse_id)
-    if is_open:
-        return [get_time_series_scatter_chart(dataproc.get_stat_by_date_df(scope, stat, value_type=value_type), locations),
-                get_top_locations_bar_chart(dataproc.get_top_locations(scope, stat, value_type=value_type, n=NUM_LOCATIONS_TRENDING), stat)]
-    else:
-        raise PreventUpdate
+    return [get_time_series_scatter_chart(dataproc.get_stat_by_date_df(scope, stat, value_type=value_type), locations),
+            get_top_locations_bar_chart(dataproc.get_top_locations(scope, stat, value_type=value_type, n=NUM_LOCATIONS_TRENDING), stat)]
 
 def register_by_date_charts_callback(stat):
     outputs = [Output(get_stat_over_time_chart_id(stat), 'figure'),
@@ -411,9 +386,9 @@ def register_by_date_charts_callback(stat):
     inputs += [Input(ID_DROPDOWN_SCOPE, 'value')]
     app.callback(outputs, inputs)(process_by_date_charts)
 
-for s in supported_stats:
-    register_by_date_charts_callback(s)
-'''
+for stat in supported_stats:
+    register_by_date_charts_callback(stat)
+
 
 @app.callback(
     Output(ID_MAPBOX, 'figure'),
@@ -425,3 +400,24 @@ def map_callback(scope):
 
 if __name__ == '__main__':
     app.run_server(debug=False, port=8888)
+
+
+'''
+                    
+                    dbc.Button(
+                        f'Click to compare the top {MAX_COMPARE_LOCS} locations for Covid-19 confirmed cases',
+                        id=ID_BUTTON_SELECT_TOP_CONFIRMED,
+                        size='lg',
+                        color='primary',
+                        block=True
+                    ),
+                    dbc.Button(
+                        f'Click to compare the top {MAX_COMPARE_LOCS} locations for Covid-19 deaths',
+                        id=ID_BUTTON_SELECT_TOP_DEATHS,
+                        size='lg',
+                        color='primary',
+                        block=True
+                    ),
+                    html.Br(),
+
+'''

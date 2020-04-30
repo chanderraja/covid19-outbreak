@@ -20,6 +20,11 @@ STAT_DEATHS='Deaths'
 STAT_RECOVERED='Recovered'
 STAT_ACTIVE='Active'
 
+
+# Granularity
+GRANULARITY_ABSOLUTE=0
+GRANULARITY_PER_CAPITA=1
+
 # Stat value types
 VALUE_TYPE_CUMULATIVE=0
 VALUE_TYPE_DAILY_DIFF=1
@@ -76,6 +81,9 @@ def get_location_overall(scope):
         return LOC_USA_OVERALL
     return 'Not implemented'
 
+def get_granularity_types():
+    return [GRANULARITY_ABSOLUTE, GRANULARITY_PER_CAPITA]
+
 def get_value_types():
     return [VALUE_TYPE_CUMULATIVE, VALUE_TYPE_DAILY_DIFF, VALUE_TYPE_DAILY_PERCENT_CHANGE]
 
@@ -93,6 +101,15 @@ def compute_df_for_value_types(df):
     df1 = df1.replace([np.inf, -np.inf], np.nan)
     d[VALUE_TYPE_DAILY_PERCENT_CHANGE] = df1
     return d
+
+def compute_df_per_capita(df, df_population):
+    df_per_capita= df
+    for column in df_per_capita.columns:
+        if column not in df_population['name']:
+            df_per_capita.drop(column, axis=1)
+            continue
+        df_per_capita[column] = df_per_capita.apply(lambda x: x[column]/df_population[df_population.name == column])
+    return df_per_capita
 
 
 def get_location(row):
@@ -134,14 +151,15 @@ class CovidDataProcessor:
     rename_countries = {
         'Bahamas': 'The Bahamas',
         'Burma': 'Myanmar',
+        'Cabo Verde': 'Cape Verde',
         'Congo (Brazzaville)': 'Republic of the Congo',
         'Congo (Kinshasa)': 'Democratic Republic of the Congo',
         'Cote d\'Ivoire': 'Ivory Coast',
         'Czechia': 'Czech Republic',
         'Guinea-Bissau': 'Guinea Bissau',
+        'Holy See': 'Vatican',
         'Korea, South': 'South Korea',
         'North Macedonia': 'Macedonia',
-        'Serbia': 'Republic of Serbia',
         'Eswatini': 'Swaziland',
         'Timor-Leste': 'East Timor',
         'Taiwan*': 'Taiwan',
@@ -194,6 +212,9 @@ class CovidDataProcessor:
             for stat in get_stat_types():
                 self.time_series_by_location_lookup[scope][stat] = dict()
                 self.time_series_by_overall_lookup[scope][stat] = dict()
+                for granularity in get_granularity_types():
+                    self.time_series_by_location_lookup[scope][stat][granularity] = dict()
+                    self.time_series_by_overall_lookup[scope][stat][granularity] = dict()
 
     def __read_world_countries_geojson(self):
         with open(self.__geojson_world_countries_url) as f:
@@ -233,7 +254,6 @@ class CovidDataProcessor:
         self.df_pop_us_counties = pd.read_csv(self.__population_us_counties_url)
 
     def __read_csse_daily_report(self):
-
         today = dt.datetime.today()
         csse_daily_csv = ''
         for i in range(0, 10):
@@ -335,8 +355,8 @@ class CovidDataProcessor:
                 sum_index=LOC_WORLD_OVERALL
             )
 
-        self.time_series_by_location_lookup[SCOPE_WORLD][STAT_CONFIRMED] = compute_df_for_value_types(self.df_confirmed_by_date_world)
-        self.time_series_by_overall_lookup[SCOPE_WORLD][STAT_CONFIRMED] = compute_df_for_value_types(self.confirmed_totals_global)
+        self.time_series_by_location_lookup[SCOPE_WORLD][STAT_CONFIRMED][GRANULARITY_ABSOLUTE] = compute_df_for_value_types(self.df_confirmed_by_date_world)
+        self.time_series_by_overall_lookup[SCOPE_WORLD][STAT_CONFIRMED][GRANULARITY_ABSOLUTE] = compute_df_for_value_types(self.confirmed_totals_global)
 
         self.df_deaths_by_date_world, self.deaths_totals_global = \
             self.__get_csse_time_series_data(
@@ -348,8 +368,8 @@ class CovidDataProcessor:
                 sum_index = LOC_WORLD_OVERALL
         )
 
-        self.time_series_by_location_lookup[SCOPE_WORLD][STAT_DEATHS] = compute_df_for_value_types(self.df_deaths_by_date_world)
-        self.time_series_by_overall_lookup[SCOPE_WORLD][STAT_DEATHS] = compute_df_for_value_types(self.deaths_totals_global)
+        self.time_series_by_location_lookup[SCOPE_WORLD][STAT_DEATHS][GRANULARITY_ABSOLUTE] = compute_df_for_value_types(self.df_deaths_by_date_world)
+        self.time_series_by_overall_lookup[SCOPE_WORLD][STAT_DEATHS][GRANULARITY_ABSOLUTE] = compute_df_for_value_types(self.deaths_totals_global)
 
         self.df_recovered_by_date_world, self.recovered_totals_global = \
             self.__get_csse_time_series_data(
@@ -361,8 +381,8 @@ class CovidDataProcessor:
                 sum_index = LOC_WORLD_OVERALL
         )
 
-        self.time_series_by_location_lookup[SCOPE_WORLD][STAT_RECOVERED] = compute_df_for_value_types(self.df_recovered_by_date_world)
-        self.time_series_by_overall_lookup[SCOPE_WORLD][STAT_RECOVERED] = compute_df_for_value_types(self.recovered_totals_global)
+        self.time_series_by_location_lookup[SCOPE_WORLD][STAT_RECOVERED][GRANULARITY_ABSOLUTE] = compute_df_for_value_types(self.df_recovered_by_date_world)
+        self.time_series_by_overall_lookup[SCOPE_WORLD][STAT_RECOVERED][GRANULARITY_ABSOLUTE] = compute_df_for_value_types(self.recovered_totals_global)
 
 
         csse_timeseries_confirmed_usa_csv = self.__csse_timeseries_url + 'time_series_covid19_confirmed_US.csv'
@@ -394,8 +414,8 @@ class CovidDataProcessor:
                 sum_index = LOC_USA_OVERALL
         )
 
-        self.time_series_by_location_lookup[SCOPE_USA][STAT_CONFIRMED] = compute_df_for_value_types(self.df_confirmed_by_date_usa)
-        self.time_series_by_overall_lookup[SCOPE_USA][STAT_CONFIRMED] = compute_df_for_value_types(self.confirmed_totals_usa)
+        self.time_series_by_location_lookup[SCOPE_USA][STAT_CONFIRMED][GRANULARITY_ABSOLUTE] = compute_df_for_value_types(self.df_confirmed_by_date_usa)
+        self.time_series_by_overall_lookup[SCOPE_USA][STAT_CONFIRMED][GRANULARITY_ABSOLUTE] = compute_df_for_value_types(self.confirmed_totals_usa)
 
         self.df_deaths_by_date_usa, self.deaths_totals_usa = \
             self.__get_csse_time_series_data(
@@ -406,8 +426,8 @@ class CovidDataProcessor:
                 sum_index = LOC_USA_OVERALL
             )
 
-        self.time_series_by_location_lookup[SCOPE_USA][STAT_DEATHS] = compute_df_for_value_types(self.df_deaths_by_date_usa)
-        self.time_series_by_overall_lookup[SCOPE_USA][STAT_DEATHS] = compute_df_for_value_types(self.deaths_totals_usa)
+        self.time_series_by_location_lookup[SCOPE_USA][STAT_DEATHS][GRANULARITY_ABSOLUTE] = compute_df_for_value_types(self.df_deaths_by_date_usa)
+        self.time_series_by_overall_lookup[SCOPE_USA][STAT_DEATHS][GRANULARITY_ABSOLUTE] = compute_df_for_value_types(self.deaths_totals_usa)
 
         drop_columns_us_counties = lambda df: df.drop(
             columns=[
@@ -437,8 +457,8 @@ class CovidDataProcessor:
                 set_index = CSSE_TIMESERIES_COL_USA_COMBINED_KEY
         )
 
-        self.time_series_by_location_lookup[SCOPE_US_COUNTIES][STAT_CONFIRMED] = compute_df_for_value_types(self.df_confirmed_by_date_us_counties)
-        self.time_series_by_overall_lookup[SCOPE_US_COUNTIES][STAT_CONFIRMED] = compute_df_for_value_types(self.confirmed_totals_us_counties)
+        self.time_series_by_location_lookup[SCOPE_US_COUNTIES][STAT_CONFIRMED][GRANULARITY_ABSOLUTE] = compute_df_for_value_types(self.df_confirmed_by_date_us_counties)
+        self.time_series_by_overall_lookup[SCOPE_US_COUNTIES][STAT_CONFIRMED][GRANULARITY_ABSOLUTE] = compute_df_for_value_types(self.confirmed_totals_us_counties)
 
         self.df_deaths_by_date_us_counties, self.deaths_totals_us_counties = \
             self.__get_csse_time_series_data(
@@ -449,9 +469,17 @@ class CovidDataProcessor:
                 set_index=CSSE_TIMESERIES_COL_USA_COMBINED_KEY
         )
 
-        self.time_series_by_location_lookup[SCOPE_US_COUNTIES][STAT_DEATHS] = compute_df_for_value_types(self.df_deaths_by_date_us_counties)
-        self.time_series_by_overall_lookup[SCOPE_US_COUNTIES][STAT_DEATHS] = compute_df_for_value_types(self.deaths_totals_us_counties)
+        self.time_series_by_location_lookup[SCOPE_US_COUNTIES][STAT_DEATHS][GRANULARITY_ABSOLUTE] = compute_df_for_value_types(self.df_deaths_by_date_us_counties)
+        self.time_series_by_overall_lookup[SCOPE_US_COUNTIES][STAT_DEATHS][GRANULARITY_ABSOLUTE] = compute_df_for_value_types(self.deaths_totals_us_counties)
 
+    def __check_name_lists(self, list1, list1_name, list2, list2_name):
+        print(f'Comparing {list1_name} with {list2_name}')
+        intersection = sorted(list(set(list1) & set(list2)))
+        print(f'intersection = {intersection}')
+        list1_only = sorted(list(set(list1) - set(list2)))
+        print(f'only in {list1_name} = {list1_only}')
+        list2_only = sorted(list(set(list2) - set(list1)))
+        print(f'only in {list2_name} = {list2_only}')
 
     def __init__(self, *args, **kwargs):
         self.__init_logger()
@@ -461,6 +489,7 @@ class CovidDataProcessor:
         self.__read_population_data()
         self.__read_csse_daily_report()
         self.__read_csse_time_series_reports()
+        self.__check_name_lists(list(self.df_pop_world['name']), 'pop_world', list(self.df_confirmed_by_date_world.columns), 'df_world')
         pass
 
     def get_geojson(self, scope):
@@ -476,11 +505,14 @@ class CovidDataProcessor:
         else:
             return None
 
-    def get_stat_by_date_df(self, scope, stat, value_type=VALUE_TYPE_CUMULATIVE, overall=False):
+    def get_stat_by_date_df(self, scope, stat, granularity=GRANULARITY_ABSOLUTE, value_type=VALUE_TYPE_CUMULATIVE, overall=False):
         """
         return dataframe containing stat by date
         :param scope: SCOPE_WORLD or other defined scope
         :param stat: stat to return in dataframe (STAT_CONFIRMED, STAT_DEATHS etc)
+        :param granularity: e.g. GRANULARITY_ABSOLUTE, GRANULARITY_PER_CAPITA
+        :param: value_type: e.g. VALUE_TYPE_CUMULATIVE, VALUE_TYPE_DAILY_CHANGE etc
+        :param: overall: if true get stats for overall location given by scope else get stats broken down by sub locations
         :return: dataframe containing requested stats per location (defined by scope) by date
         """
         lookup = self.time_series_by_location_lookup if overall is False else self.time_series_by_overall_lookup
@@ -491,23 +523,27 @@ class CovidDataProcessor:
         if stat not in stat_lookup:
             self.logger.error(f'No data found for stat={stat} under scope={scope}')
             return None
-        value_type_lookup = stat_lookup[stat]
+        granularity_lookup = stat_lookup[stat]
+        if granularity not in granularity_lookup:
+            self.logger.error(f'No data found for granularity={granularity} under scope={scope} and stat={stat}')
+            return None
+        value_type_lookup = granularity_lookup[granularity]
         if value_type not in value_type_lookup:
             self.logger.error(f'No data found for stat={stat}, scope={scope}, value_type={value_type}')
             return None
         df = value_type_lookup[value_type]
         return df
 
-    def get_latest_stat(self, stat, scope, loc=None):
+    def get_latest_stat(self, stat, scope, granularity=GRANULARITY_ABSOLUTE, loc=None):
         """
 
         :param scope:
         :param location:
         :return:
         """
-        df = self.get_stat_by_date_df(scope, stat, VALUE_TYPE_CUMULATIVE, overall=(loc is None))
-        df_diff = self.get_stat_by_date_df(scope, stat, VALUE_TYPE_DAILY_DIFF, overall=(loc is None))
-        df_pct_change = self.get_stat_by_date_df(scope, stat, VALUE_TYPE_DAILY_PERCENT_CHANGE, overall=(loc is None))
+        df = self.get_stat_by_date_df(scope, stat, granularity=granularity, value_type=VALUE_TYPE_CUMULATIVE, overall=(loc is None))
+        df_diff = self.get_stat_by_date_df(scope, stat, granularity=granularity, value_type=VALUE_TYPE_DAILY_DIFF, overall=(loc is None))
+        df_pct_change = self.get_stat_by_date_df(scope, stat, granularity=granularity, value_type=VALUE_TYPE_DAILY_PERCENT_CHANGE, overall=(loc is None))
         latest_date = df.index.max()
         if loc is None:
             loc = get_location_overall(scope)
@@ -536,8 +572,18 @@ class CovidDataProcessor:
         else:
             return None
 
+    def get_all_locations(self, scope, stat=STAT_CONFIRMED):
+        """
+        Get a list of all locations from which we have data for the specified scope
+        :param scope: SCOPE_WORLD or SCOPE_USA
+        :param stat: optional stat to sepecify which dataframe to get location data from
+        :return: list of locations specific to scope
+        """
+        df = self.get_stat_by_date_df(scope, stat=stat)
+        return df.columns
+
     def get_top_locations(self, scope, stat, value_type=VALUE_TYPE_CUMULATIVE, n=10):
-        df = self.get_stat_by_date_df(scope, stat, value_type)
+        df = self.get_stat_by_date_df(scope, stat, value_type=value_type)
         latest_date = df.index.max()
         latest_series = df.loc[latest_date]
         return latest_series.nlargest(n=n)
