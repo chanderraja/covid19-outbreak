@@ -102,13 +102,15 @@ def compute_df_for_value_types(df):
     d[VALUE_TYPE_DAILY_PERCENT_CHANGE] = df1
     return d
 
-def compute_df_per_capita(df, df_population):
-    df_per_capita= df
-    for column in df_per_capita.columns:
-        if column not in df_population['name']:
-            df_per_capita.drop(column, axis=1)
+def compute_df_per_capita(df, df_population, multiplier=1000000.0):
+    df_per_capita = df
+    for location in df_per_capita:
+        found = df_population.query(f'name == "{location}"').population
+        if found.count() == 0:
+            df_per_capita.drop(location, axis=1, inplace=True)
             continue
-        df_per_capita[column] = df_per_capita.apply(lambda x: x[column]/df_population[df_population.name == column])
+        population = found.values[0]
+        df_per_capita[location] = (df_per_capita[location] * multiplier)/population
     return df_per_capita
 
 
@@ -355,7 +357,10 @@ class CovidDataProcessor:
                 sum_index=LOC_WORLD_OVERALL
             )
 
+        self.df_confirmed_by_date_world_per_capita = compute_df_per_capita(self.df_confirmed_by_date_world, self.df_pop_world, multiplier=1000000.0)
         self.time_series_by_location_lookup[SCOPE_WORLD][STAT_CONFIRMED][GRANULARITY_ABSOLUTE] = compute_df_for_value_types(self.df_confirmed_by_date_world)
+        self.time_series_by_location_lookup[SCOPE_WORLD][STAT_CONFIRMED][GRANULARITY_PER_CAPITA] = compute_df_for_value_types(self.df_confirmed_by_date_world_per_capita)
+
         self.time_series_by_overall_lookup[SCOPE_WORLD][STAT_CONFIRMED][GRANULARITY_ABSOLUTE] = compute_df_for_value_types(self.confirmed_totals_global)
 
         self.df_deaths_by_date_world, self.deaths_totals_global = \
