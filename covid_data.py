@@ -357,8 +357,8 @@ class CovidDataProcessor:
                 sum_index=LOC_WORLD_OVERALL
             )
 
-        self.df_confirmed_by_date_world_per_capita = compute_df_per_capita(self.df_confirmed_by_date_world, self.df_pop_world, multiplier=1000000.0)
         self.time_series_by_location_lookup[SCOPE_WORLD][STAT_CONFIRMED][GRANULARITY_ABSOLUTE] = compute_df_for_value_types(self.df_confirmed_by_date_world)
+        self.df_confirmed_by_date_world_per_capita = compute_df_per_capita(self.df_confirmed_by_date_world, self.df_pop_world, multiplier=1000000.0)
         self.time_series_by_location_lookup[SCOPE_WORLD][STAT_CONFIRMED][GRANULARITY_PER_CAPITA] = compute_df_for_value_types(self.df_confirmed_by_date_world_per_capita)
 
         self.time_series_by_overall_lookup[SCOPE_WORLD][STAT_CONFIRMED][GRANULARITY_ABSOLUTE] = compute_df_for_value_types(self.confirmed_totals_global)
@@ -374,6 +374,9 @@ class CovidDataProcessor:
         )
 
         self.time_series_by_location_lookup[SCOPE_WORLD][STAT_DEATHS][GRANULARITY_ABSOLUTE] = compute_df_for_value_types(self.df_deaths_by_date_world)
+        self.df_deaths_by_date_world_per_capita = compute_df_per_capita(self.df_deaths_by_date_world, self.df_pop_world, multiplier=1000000.0)
+        self.time_series_by_location_lookup[SCOPE_WORLD][STAT_DEATHS][GRANULARITY_PER_CAPITA] = compute_df_for_value_types(self.df_deaths_by_date_world_per_capita)
+
         self.time_series_by_overall_lookup[SCOPE_WORLD][STAT_DEATHS][GRANULARITY_ABSOLUTE] = compute_df_for_value_types(self.deaths_totals_global)
 
         self.df_recovered_by_date_world, self.recovered_totals_global = \
@@ -387,6 +390,9 @@ class CovidDataProcessor:
         )
 
         self.time_series_by_location_lookup[SCOPE_WORLD][STAT_RECOVERED][GRANULARITY_ABSOLUTE] = compute_df_for_value_types(self.df_recovered_by_date_world)
+        self.df_recovered_by_date_world_per_capita = compute_df_per_capita(self.df_recovered_by_date_world, self.df_pop_world, multiplier=1000000.0)
+        self.time_series_by_location_lookup[SCOPE_WORLD][STAT_RECOVERED][GRANULARITY_PER_CAPITA] = compute_df_for_value_types(self.df_recovered_by_date_world_per_capita)
+
         self.time_series_by_overall_lookup[SCOPE_WORLD][STAT_RECOVERED][GRANULARITY_ABSOLUTE] = compute_df_for_value_types(self.recovered_totals_global)
 
 
@@ -495,6 +501,8 @@ class CovidDataProcessor:
         self.__read_csse_daily_report()
         self.__read_csse_time_series_reports()
         self.__check_name_lists(list(self.df_pop_world['name']), 'pop_world', list(self.df_confirmed_by_date_world.columns), 'df_world')
+        self.__check_name_lists(list(self.df_pop_us_states['state']), 'pop_us_states', list(self.df_confirmed_by_date_usa.columns), 'df_us_states')
+        self.__check_name_lists(list(self.df_pop_us_counties['Combined_Key']), 'pop_us_counties', list(self.df_confirmed_by_date_us_counties.columns), 'df_us_counties')
         pass
 
     def get_geojson(self, scope):
@@ -587,7 +595,7 @@ class CovidDataProcessor:
         df = self.get_stat_by_date_df(scope, stat=stat)
         return df.columns
 
-    def get_top_locations(self, scope, stat, value_type=VALUE_TYPE_CUMULATIVE, n=10):
+    def get_top_locations(self, scope, stat, granularity=GRANULARITY_ABSOLUTE, value_type=VALUE_TYPE_CUMULATIVE, n=10):
         df = self.get_stat_by_date_df(scope, stat, value_type=value_type)
         latest_date = df.index.max()
         latest_series = df.loc[latest_date]
