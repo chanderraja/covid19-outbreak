@@ -174,10 +174,7 @@ def get_stat_card(scope, stat, value_type=VALUE_TYPE_CUMULATIVE):
     button_id = get_stat_button_id(stat)
     collapse_id = get_stat_collapse_id(stat)
     time_chart_obj = dcc.Graph(id=get_stat_over_time_chart_id(stat))
-    top_n_chart_obj = dcc.Graph(
-        id=get_top_n_chart_id(stat),
-        figure=get_top_locations_bar_chart(dataproc.get_top_locations(scope, stat, value_type=value_type, n=NUM_LOCATIONS_TRENDING), stat)
-    )
+    top_n_chart_obj = dcc.Graph(id=get_top_n_chart_id(stat))
     chart = dcc.Loading(dbc.Row([dbc.Col(time_chart_obj, sm=12, lg=6), dbc.Col(top_n_chart_obj, sm=12, lg=6)]))
 
     return dbc.Card([
@@ -248,7 +245,7 @@ def serve_layout():
                 dbc.Col(get_stat_charts_ui(scope), lg=12)
             ]),
             dbc.Row([
-                dbc.Col(dbc.Card([dcc.Loading(dcc.Graph(id=ID_MAPBOX, figure=get_map(scope)))]), lg=12),
+                dbc.Col(dbc.Card([dcc.Loading(dcc.Graph(id=ID_MAPBOX))]), lg=8),
             ], align='center', justify='center'),
         ], fluid=True,
     )
