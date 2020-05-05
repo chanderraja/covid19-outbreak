@@ -77,7 +77,11 @@ IMPORT_CFG_AGGREGATE_COLUMN='aggregate_column'  # key to a column to aggregate v
 IMPORT_CFG_RENAME_LOCATIONS='rename'            # key to a dict with key=current name and value=string to rename as
 IMPORT_CFG_SET_INDEX='set_index'                # key to a column to set the data frame index to
 IMPORT_CFG_POPULATION_DATA='population'         # key to a dict containing configuration to read population data
-IMPORT_CFG_POPULATION_LOCATION_COLUMN='loc'     # key to a string representing the location column in the population DF
+IMPORT_CFG_POPULATION_LOCATION_COLUMN='location_column'     # key to a string representing the location column in the population DF
+IMPORT_CFG_POPULATION_POPULATION_COLUMN='population_column' # key to a string representing the population column in the population DF
+IMPORT_CFG_PER_CAPITA_MULTIPLIER='per_capita_multiplier'    # key to a value representing the per capita multiplier.
+                                                            # e.g. if the multiplier is 1000, per capita stats will be in terms of
+                                                            # numbers out of 1000 people
 
 def get_stat_types():
     return [STAT_CONFIRMED, STAT_DEATHS, STAT_RECOVERED, STAT_ACTIVE]
@@ -115,10 +119,10 @@ def compute_df_for_value_types(df):
     d[VALUE_TYPE_DAILY_PERCENT_CHANGE] = df1
     return d
 
-def compute_df_per_capita(df, df_population, location_column, multiplier=1000000.0):
+def compute_df_per_capita(df, df_population, location_column, population_column, multiplier=1000000.0):
     df_per_capita = df
     for location in df_per_capita:
-        found = df_population.query(f'{location_column} == "{location}"').population
+        found = df_population.query(f'{location_column} == "{location}"')[population_column]
         if found.count() == 0:
             df_per_capita.drop(location, axis=1, inplace=True)
             continue
@@ -214,7 +218,8 @@ class CovidDataProcessor:
     time_series_data_config = {
         SCOPE_WORLD: {
             IMPORT_CFG_POPULATION_DATA: {
-                IMPORT_CFG_POPULATION_LOCATION_COLUMN: 'name'
+                IMPORT_CFG_POPULATION_LOCATION_COLUMN: 'name',
+                IMPORT_CFG_POPULATION_POPULATION_COLUMN: 'population',
             },
             IMPORT_CFG_URLS: {
                 STAT_CONFIRMED: __csse_timeseries_url + 'time_series_covid19_confirmed_global.csv',
@@ -228,11 +233,13 @@ class CovidDataProcessor:
             ],
             IMPORT_CFG_AGGREGATE_COLUMN: CSSE_TIMESERIES_COL_GLOBAL_COUNTRY_REGION,
             IMPORT_CFG_RENAME_LOCATIONS: rename_countries,
+            IMPORT_CFG_PER_CAPITA_MULTIPLIER: 100000.0
         },
 
         SCOPE_USA: {
             IMPORT_CFG_POPULATION_DATA: {
-                IMPORT_CFG_POPULATION_LOCATION_COLUMN: 'state'
+                IMPORT_CFG_POPULATION_LOCATION_COLUMN: 'state',
+                IMPORT_CFG_POPULATION_POPULATION_COLUMN: 'population',
             },
             IMPORT_CFG_URLS: {
                 STAT_CONFIRMED: __csse_timeseries_url + 'time_series_covid19_confirmed_US.csv',
@@ -250,10 +257,32 @@ class CovidDataProcessor:
                 CSSE_TIMESERIES_COL_USA_POPULATION
             ],
             IMPORT_CFG_AGGREGATE_COLUMN: CSSE_TIMESERIES_COL_USA_PROVINCE_STATE,
+            IMPORT_CFG_PER_CAPITA_MULTIPLIER: 10000.0
         },
 
         SCOPE_US_COUNTIES: {
-
+            IMPORT_CFG_POPULATION_DATA: {
+                IMPORT_CFG_POPULATION_LOCATION_COLUMN: 'Combined_Key',
+                IMPORT_CFG_POPULATION_POPULATION_COLUMN: 'Population',
+            },
+            IMPORT_CFG_URLS: {
+                STAT_CONFIRMED: __csse_timeseries_url + 'time_series_covid19_confirmed_US.csv',
+                STAT_DEATHS: __csse_timeseries_url + 'time_series_covid19_deaths_US.csv',
+            },
+            IMPORT_CFG_DROP_COLUMNS: [
+                CSSE_TIMESERIES_COL_USA_COUNTRY_REGION,
+                CSSE_TIMESERIES_COL_USA_PROVINCE_STATE,
+                CSSE_TIMESERIES_COL_USA_LATITUDE,
+                CSSE_TIMESERIES_COL_USA_LONGITUDE,
+                CSSE_TIMESERIES_COL_USA_UID,
+                CSSE_TIMESERIES_COL_USA_ISO2,
+                CSSE_TIMESERIES_COL_USA_ISO3,
+                CSSE_TIMESERIES_COL_USA_ADMIN2,
+                CSSE_TIMESERIES_COL_USA_CODE3,
+                CSSE_TIMESERIES_COL_USA_FIPS,
+                CSSE_TIMESERIES_COL_USA_POPULATION
+            ],
+            IMPORT_CFG_SET_INDEX: CSSE_TIMESERIES_COL_USA_COMBINED_KEY,
         }
     }
 
@@ -411,6 +440,7 @@ class CovidDataProcessor:
             popdata_cfg = cfg_scope.get(IMPORT_CFG_POPULATION_DATA)
             if popdata_cfg is not None:
                 popdata_loc_column = popdata_cfg[IMPORT_CFG_POPULATION_LOCATION_COLUMN]
+                popdata_pop_column = popdata_cfg[IMPORT_CFG_POPULATION_POPULATION_COLUMN]
             urls = cfg_scope.get(IMPORT_CFG_URLS)
             if urls is None:
                 self.logger.error(f'{log_prefix}No URL section found in config, skipping...')
@@ -419,6 +449,9 @@ class CovidDataProcessor:
             drop_columns = cfg_scope.get(IMPORT_CFG_DROP_COLUMNS)
             aggregate_column = cfg_scope.get(IMPORT_CFG_AGGREGATE_COLUMN)
             rename_locations = cfg_scope.get(IMPORT_CFG_RENAME_LOCATIONS)
+            per_capita_multiplier = 100000.0
+            if cfg_scope.get(IMPORT_CFG_PER_CAPITA_MULTIPLIER) is not None:
+                per_capita_multiplier = cfg_scope[IMPORT_CFG_PER_CAPITA_MULTIPLIER]
             for stat in get_stat_types():
                 log_prefix2 = log_prefix + f'stat = {stat}: '
                 url = urls.get(stat)
@@ -456,7 +489,8 @@ class CovidDataProcessor:
                 df_per_capita = \
                     compute_df_per_capita(df1_transposed, self.population_data_lookup[scope],
                                           location_column=popdata_loc_column,
-                                           multiplier=1000000.0)
+                                          population_column=popdata_pop_column,
+                                          multiplier=1000000.0)
                 self.time_series_by_location_lookup[scope][stat][GRANULARITY_PER_CAPITA] = \
                     compute_df_for_value_types(df_per_capita)
                 self.time_series_by_overall_lookup[scope][stat][GRANULARITY_ABSOLUTE] = \
@@ -465,142 +499,6 @@ class CovidDataProcessor:
 
     def __read_csse_time_series_reports(self):
         self.__read_time_series_data()
-        '''
-        drop_columns_global = [
-                CSSE_TIMESERIES_COL_GLOBAL_PROVINCE_STATE,
-                CSSE_TIMESERIES_COL_GLOBAL_LATITUDE,
-                CSSE_TIMESERIES_COL_GLOBAL_LONGITUDE]
-
-        csse_timeseries_confirmed_global_csv = self.__csse_timeseries_url + 'time_series_covid19_confirmed_global.csv'
-        csse_timeseries_deaths_global_csv = self.__csse_timeseries_url + 'time_series_covid19_deaths_global.csv'
-        csse_timeseries_recovered_global_csv = self.__csse_timeseries_url + 'time_series_covid19_recovered_global.csv'
-
-        self.df_confirmed_by_date_world, self.confirmed_totals_global = \
-            self.__get_csse_time_series_data(
-                url=csse_timeseries_confirmed_global_csv,
-                drop_columns=drop_columns_global,
-                aggregate_column=CSSE_TIMESERIES_COL_GLOBAL_COUNTRY_REGION,
-                rename_locations=self.rename_countries,
-                logtext='global time series confirmed cases',
-                sum_index=LOC_WORLD_OVERALL
-            )
-
-        self.time_series_by_location_lookup[SCOPE_WORLD][STAT_CONFIRMED][GRANULARITY_ABSOLUTE] = compute_df_for_value_types(self.df_confirmed_by_date_world)
-        self.df_confirmed_by_date_world_per_capita = compute_df_per_capita(self.df_confirmed_by_date_world, self.df_pop_world, multiplier=1000000.0)
-        self.time_series_by_location_lookup[SCOPE_WORLD][STAT_CONFIRMED][GRANULARITY_PER_CAPITA] = compute_df_for_value_types(self.df_confirmed_by_date_world_per_capita)
-
-        self.time_series_by_overall_lookup[SCOPE_WORLD][STAT_CONFIRMED][GRANULARITY_ABSOLUTE] = compute_df_for_value_types(self.confirmed_totals_global)
-
-        self.df_deaths_by_date_world, self.deaths_totals_global = \
-            self.__get_csse_time_series_data(
-                url=csse_timeseries_deaths_global_csv,
-                drop_columns=drop_columns_global,
-                aggregate_column=CSSE_TIMESERIES_COL_GLOBAL_COUNTRY_REGION,
-                rename_locations=self.rename_countries,
-                logtext='global time series deaths',
-                sum_index = LOC_WORLD_OVERALL
-        )
-
-        self.time_series_by_location_lookup[SCOPE_WORLD][STAT_DEATHS][GRANULARITY_ABSOLUTE] = compute_df_for_value_types(self.df_deaths_by_date_world)
-        self.df_deaths_by_date_world_per_capita = compute_df_per_capita(self.df_deaths_by_date_world, self.df_pop_world, multiplier=1000000.0)
-        self.time_series_by_location_lookup[SCOPE_WORLD][STAT_DEATHS][GRANULARITY_PER_CAPITA] = compute_df_for_value_types(self.df_deaths_by_date_world_per_capita)
-
-        self.time_series_by_overall_lookup[SCOPE_WORLD][STAT_DEATHS][GRANULARITY_ABSOLUTE] = compute_df_for_value_types(self.deaths_totals_global)
-
-        self.df_recovered_by_date_world, self.recovered_totals_global = \
-            self.__get_csse_time_series_data(
-                url=csse_timeseries_recovered_global_csv,
-                drop_columns=drop_columns_global,
-                aggregate_column=CSSE_TIMESERIES_COL_GLOBAL_COUNTRY_REGION,
-                rename_locations=self.rename_countries,
-                logtext='global time series recovered cases',
-                sum_index = LOC_WORLD_OVERALL
-        )
-
-        self.time_series_by_location_lookup[SCOPE_WORLD][STAT_RECOVERED][GRANULARITY_ABSOLUTE] = compute_df_for_value_types(self.df_recovered_by_date_world)
-        self.df_recovered_by_date_world_per_capita = compute_df_per_capita(self.df_recovered_by_date_world, self.df_pop_world, multiplier=1000000.0)
-        self.time_series_by_location_lookup[SCOPE_WORLD][STAT_RECOVERED][GRANULARITY_PER_CAPITA] = compute_df_for_value_types(self.df_recovered_by_date_world_per_capita)
-
-        self.time_series_by_overall_lookup[SCOPE_WORLD][STAT_RECOVERED][GRANULARITY_ABSOLUTE] = compute_df_for_value_types(self.recovered_totals_global)
-        '''
-        csse_timeseries_confirmed_usa_csv = self.__csse_timeseries_url + 'time_series_covid19_confirmed_US.csv'
-        csse_timeseries_deaths_usa_csv = self.__csse_timeseries_url + 'time_series_covid19_deaths_US.csv'
-        '''
-        drop_columns_usa = [
-                CSSE_TIMESERIES_COL_USA_COUNTRY_REGION,
-                CSSE_TIMESERIES_COL_USA_LATITUDE,
-                CSSE_TIMESERIES_COL_USA_LONGITUDE,
-                CSSE_TIMESERIES_COL_USA_UID,
-                CSSE_TIMESERIES_COL_USA_ISO2,
-                CSSE_TIMESERIES_COL_USA_ISO3,
-                CSSE_TIMESERIES_COL_USA_CODE3,
-                CSSE_TIMESERIES_COL_USA_FIPS,
-                CSSE_TIMESERIES_COL_USA_POPULATION
-            ]
-
-        self.df_confirmed_by_date_usa, self.confirmed_totals_usa = \
-            self.__get_csse_time_series_data(
-                url=csse_timeseries_confirmed_usa_csv,
-                drop_columns=drop_columns_usa,
-                aggregate_column=CSSE_TIMESERIES_COL_USA_PROVINCE_STATE,
-                logtext='USA time series confirmed cases',
-                sum_index = LOC_USA_OVERALL
-        )
-
-        self.time_series_by_location_lookup[SCOPE_USA][STAT_CONFIRMED][GRANULARITY_ABSOLUTE] = compute_df_for_value_types(self.df_confirmed_by_date_usa)
-        self.time_series_by_overall_lookup[SCOPE_USA][STAT_CONFIRMED][GRANULARITY_ABSOLUTE] = compute_df_for_value_types(self.confirmed_totals_usa)
-
-        self.df_deaths_by_date_usa, self.deaths_totals_usa = \
-            self.__get_csse_time_series_data(
-                url=csse_timeseries_deaths_usa_csv,
-                drop_columns=drop_columns_usa,
-                aggregate_column=CSSE_TIMESERIES_COL_USA_PROVINCE_STATE,
-                logtext='USA time series deaths',
-                sum_index = LOC_USA_OVERALL
-            )
-
-        self.time_series_by_location_lookup[SCOPE_USA][STAT_DEATHS][GRANULARITY_ABSOLUTE] = compute_df_for_value_types(self.df_deaths_by_date_usa)
-        self.time_series_by_overall_lookup[SCOPE_USA][STAT_DEATHS][GRANULARITY_ABSOLUTE] = compute_df_for_value_types(self.deaths_totals_usa)
-        '''
-
-        drop_columns_us_counties = [
-                CSSE_TIMESERIES_COL_USA_COUNTRY_REGION,
-                CSSE_TIMESERIES_COL_USA_PROVINCE_STATE,
-                CSSE_TIMESERIES_COL_USA_LATITUDE,
-                CSSE_TIMESERIES_COL_USA_LONGITUDE,
-                CSSE_TIMESERIES_COL_USA_UID,
-                CSSE_TIMESERIES_COL_USA_ISO2,
-                CSSE_TIMESERIES_COL_USA_ISO3,
-                CSSE_TIMESERIES_COL_USA_ADMIN2,
-                CSSE_TIMESERIES_COL_USA_CODE3,
-                CSSE_TIMESERIES_COL_USA_FIPS,
-                CSSE_TIMESERIES_COL_USA_POPULATION
-            ]
-
-
-        self.df_confirmed_by_date_us_counties, self.confirmed_totals_us_counties = \
-            self.__get_csse_time_series_data(
-                url=csse_timeseries_confirmed_usa_csv,
-                drop_columns=drop_columns_us_counties,
-                logtext='US counties time series confirmed cases',
-                sum_index = LOC_USA_OVERALL,
-                set_index = CSSE_TIMESERIES_COL_USA_COMBINED_KEY
-        )
-
-        self.time_series_by_location_lookup[SCOPE_US_COUNTIES][STAT_CONFIRMED][GRANULARITY_ABSOLUTE] = compute_df_for_value_types(self.df_confirmed_by_date_us_counties)
-        self.time_series_by_overall_lookup[SCOPE_US_COUNTIES][STAT_CONFIRMED][GRANULARITY_ABSOLUTE] = compute_df_for_value_types(self.confirmed_totals_us_counties)
-
-        self.df_deaths_by_date_us_counties, self.deaths_totals_us_counties = \
-            self.__get_csse_time_series_data(
-                url=csse_timeseries_deaths_usa_csv,
-                drop_columns=drop_columns_us_counties,
-                logtext='US counties time series deaths',
-                sum_index = LOC_USA_OVERALL,
-                set_index=CSSE_TIMESERIES_COL_USA_COMBINED_KEY
-        )
-
-        self.time_series_by_location_lookup[SCOPE_US_COUNTIES][STAT_DEATHS][GRANULARITY_ABSOLUTE] = compute_df_for_value_types(self.df_deaths_by_date_us_counties)
-        self.time_series_by_overall_lookup[SCOPE_US_COUNTIES][STAT_DEATHS][GRANULARITY_ABSOLUTE] = compute_df_for_value_types(self.deaths_totals_us_counties)
 
     def __check_name_lists(self, list1, list1_name, list2, list2_name):
         print(f'Comparing {list1_name} with {list2_name}')
@@ -618,6 +516,7 @@ class CovidDataProcessor:
         self.__read_us_counties_geojson()
         self.__read_population_data()
         self.__read_csse_daily_report()
+        self.__read_time_series_data()
         self.__read_csse_time_series_reports()
         #self.__check_name_lists(list(self.population_data_lookup[SCOPE_WORLD]['name']), 'pop_world', list(self.df_confirmed_by_date_world.columns), 'df_world')
         #self.__check_name_lists(list(self.population_data_lookup[SCOPE_WORLD]['state']), 'pop_us_states', list(self.df_confirmed_by_date_usa.columns), 'df_us_states')
