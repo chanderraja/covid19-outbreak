@@ -7,6 +7,7 @@ from dash.exceptions import PreventUpdate
 from covid_data import CovidDataProcessor, SCOPE_WORLD, SCOPE_USA, SCOPE_US_COUNTIES
 from covid_data import get_scope_types, get_location_overall
 from covid_data import STAT_CONFIRMED, STAT_DEATHS, STAT_RECOVERED, STAT_ACTIVE
+from covid_data import GRANULARITY_ABSOLUTE, GRANULARITY_PER_CAPITA
 from tab_common import get_time_series_scatter_chart, get_top_locations_bar_chart
 from tab_common import VALUE_TYPE_CUMULATIVE, VALUE_TYPE_DAILY_DIFF, VALUE_TYPE_DAILY_PERCENT_CHANGE
 
@@ -74,7 +75,8 @@ def get_map(scope):
 
 
 def get_location_options(scope):
-    df = dataproc.get_stat_by_date_df(scope, stat=STAT_CONFIRMED)
+    granularity = GRANULARITY_PER_CAPITA if scope == SCOPE_WORLD else GRANULARITY_ABSOLUTE
+    df = dataproc.get_stat_by_date_df(scope, stat=STAT_CONFIRMED, granularity=granularity)
     options = [{'label': i, 'value': i} for i in df.columns]
     return options
 

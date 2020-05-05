@@ -5,6 +5,11 @@ import logging
 import json
 import numpy as np
 
+def whoami( ):
+    import sys
+    return sys._getframe(1).f_code.co_name
+
+
 # Scope
 SCOPE_WORLD='Worldwide'         # worldwide scope indexed by countries
 SCOPE_USA='United States'       # US scope indexed by states
@@ -48,7 +53,7 @@ CSSE_DAILY_COL_HOVERTEXT='Hovertext'
 CSSE_DAILY_COL_LAST_UPDATE='Last_Update'
 
 CSSE_TIMESERIES_COL_GLOBAL_COUNTRY_REGION='Country/Region'
-CSSE_TIMESERIES_COL_GLOBAL_PROVINCE_STATE='Province/State'
+CSSE_TIMESERIES_COL_GLOBAL_PROVINCE_STATE= 'Province/State'
 CSSE_TIMESERIES_COL_GLOBAL_LATITUDE='Lat'
 CSSE_TIMESERIES_COL_GLOBAL_LONGITUDE='Long'
 
@@ -65,6 +70,12 @@ CSSE_TIMESERIES_COL_USA_ADMIN2='Admin2'
 CSSE_TIMESERIES_COL_USA_POPULATION='Population'
 CSSE_TIMESERIES_COL_USA_COMBINED_KEY='Combined_Key'
 
+# Data import config keys
+IMPORT_CFG_URLS='urls'                          # key to a dict of URLs by stat
+IMPORT_CFG_DROP_COLUMNS='drop_columns'          # key to a list of columns to drop from data frame
+IMPORT_CFG_AGGREGATE_COLUMN='aggregate_column'  # key to a column to aggregate values by
+IMPORT_CFG_RENAME_LOCATIONS='rename'            # key to a dict with key=current name and value=string to rename as
+IMPORT_CFG_SET_INDEX='set_index'                # key to a column to set the data frame index to
 
 def get_stat_types():
     return [STAT_CONFIRMED, STAT_DEATHS, STAT_RECOVERED, STAT_ACTIVE]
@@ -195,7 +206,33 @@ class CovidDataProcessor:
         SCOPE_US_COUNTIES: {}
     }
 
+    population_data_lookup = {
+    }
 
+    time_series_data_config = {
+        SCOPE_WORLD: {
+            IMPORT_CFG_URLS: {
+                STAT_CONFIRMED: __csse_timeseries_url + 'time_series_covid19_confirmed_global.csv',
+                STAT_DEATHS: __csse_timeseries_url + 'time_series_covid19_deaths_global.csv',
+                STAT_RECOVERED: __csse_timeseries_url + 'time_series_covid19_recovered_global.csv'
+            },
+            IMPORT_CFG_DROP_COLUMNS: [
+                CSSE_TIMESERIES_COL_GLOBAL_PROVINCE_STATE,
+                CSSE_TIMESERIES_COL_GLOBAL_LATITUDE,
+                CSSE_TIMESERIES_COL_GLOBAL_LONGITUDE,
+            ],
+            IMPORT_CFG_AGGREGATE_COLUMN: CSSE_TIMESERIES_COL_GLOBAL_COUNTRY_REGION,
+            IMPORT_CFG_RENAME_LOCATIONS: rename_countries,
+        },
+
+        SCOPE_USA: {
+
+        },
+
+        SCOPE_US_COUNTIES: {
+
+        }
+    }
 
     def __init_logger(self):
         self.logger = logging.getLogger(self.__class__.__name__)
@@ -251,9 +288,12 @@ class CovidDataProcessor:
                 continue
 
     def __read_population_data(self):
-        self.df_pop_world = pd.read_csv(self.__population_world_url)
-        self.df_pop_us_states = pd.read_csv(self.__population_us_states_url)
-        self.df_pop_us_counties = pd.read_csv(self.__population_us_counties_url)
+        df_pop_world = pd.read_csv(self.__population_world_url)
+        self.population_data_lookup[SCOPE_WORLD] = df_pop_world
+        df_pop_us_states = pd.read_csv(self.__population_us_states_url)
+        self.population_data_lookup[SCOPE_USA] = df_pop_us_states
+        df_pop_us_counties = pd.read_csv(self.__population_us_counties_url)
+        self.population_data_lookup[SCOPE_US_COUNTIES] = df_pop_us_counties
 
     def __read_csse_daily_report(self):
         today = dt.datetime.today()
@@ -308,20 +348,24 @@ class CovidDataProcessor:
         self.scope_to_totals_map[SCOPE_US_COUNTIES] = self.usa_totals
 
 
-    def __get_csse_time_series_data(self, url, set_index=None, sum_index='Total', dropcolumns_func=None, aggregate_func=None, logtext=None, rename_countries=False):
+    def __get_csse_time_series_data(self, url, set_index=None, sum_index='Total',
+                                    drop_columns=None,
+                                    aggregate_column=None,
+                                    logtext=None,
+                                    rename_locations=None):
         if logtext is not None:
             self.logger.info(f'Reading {logtext} data from {url}...')
         df = pd.read_csv(url)
 
         if set_index is not None:
             df.set_index(keys=set_index, inplace=True)
-        if dropcolumns_func is not None:
+        if drop_columns is not None:
             self.logger.info(f'Dropping unwanted columns...')
-            dropcolumns_func(df)
-        if aggregate_func is not None:
-            df = aggregate_func(df)
-        if rename_countries:
-            df.rename(index=self.rename_countries, inplace=True)
+            df.drop(columns=drop_columns, inplace=True, errors='ignore')
+        if aggregate_column is not None:
+            df = df.groupby(df[aggregate_column]).aggregate('sum')
+        if rename_locations is not None:
+            df.rename(index=rename_locations, inplace=True)
             df.sort_index(inplace=True)
         sum = df.aggregate('sum')
         df_sum = pd.DataFrame([sum], index=[sum_index])
@@ -332,16 +376,71 @@ class CovidDataProcessor:
         df1_transposed.index = pd.to_datetime(df1_transposed.index)
         return df1_transposed, df_sum
 
+    def __read_time_series_data(self):
+        cfg = self.time_series_data_config
+        for scope in get_scope_types():
+            log_prefix = f'{whoami()}: scope={scope}: '
+            cfg_scope = cfg.get(scope)
+            if cfg_scope is None:
+                self.logger.warning(f'{log_prefix}No data config found for this scope, skipping...')
+                continue
+            urls = cfg_scope.get(IMPORT_CFG_URLS)
+            if urls is None:
+                self.logger.error(f'{log_prefix}No URL section found in config, skipping...')
+                continue
+            set_index = cfg_scope.get(IMPORT_CFG_SET_INDEX)
+            drop_columns = cfg_scope.get(IMPORT_CFG_DROP_COLUMNS)
+            aggregate_column = cfg_scope.get(IMPORT_CFG_AGGREGATE_COLUMN)
+            rename_locations = cfg_scope.get(IMPORT_CFG_RENAME_LOCATIONS)
+            for stat in get_stat_types():
+                log_prefix2 = log_prefix + f'stat = {stat}: '
+                url = urls.get(stat)
+                if url is None:
+                    self.logger.error(f'{log_prefix2}No URL found for this statistic, skipping...')
+                    continue
+
+                # read data file into a data frame
+                self.logger.info(f'scope={scope} stat={stat}: Reading raw data from {url}...')
+                df = pd.read_csv(url)
+
+                if set_index is not None:
+                    self.logger.info(f'{log_prefix2}Setting index to {set_index}')
+                    df.set_index(keys=set_index, inplace=True)
+                if drop_columns is not None:
+                    self.logger.info(f'{log_prefix2}Dropping unwanted columns - {drop_columns}...')
+                    df.drop(columns=drop_columns, inplace=True, errors='ignore')
+                if aggregate_column is not None:
+                    self.logger.info(f'{log_prefix2}Aggregating values by column {aggregate_column}...')
+                    df = df.groupby(df[aggregate_column]).aggregate('sum')
+                if rename_locations is not None:
+                    self.logger.info(f'{log_prefix2}Renaming locations and sorting by location names...')
+                    df.rename(index=rename_locations, inplace=True)
+                    df.sort_index(inplace=True)
+                sum = df.aggregate('sum')
+                df_sum = pd.DataFrame([sum], index=[get_location_overall(scope)])
+                df_sum = df_sum.transpose()
+                df_sum.index = pd.to_datetime(df_sum.index)
+                # df = pd.concat([df_sum, df], sort=False)
+                df1_transposed = df.transpose()
+                df1_transposed.index = pd.to_datetime(df1_transposed.index)
+
+                self.time_series_by_location_lookup[scope][stat][GRANULARITY_ABSOLUTE] = \
+                    compute_df_for_value_types(df1_transposed)
+                df_per_capita = \
+                    compute_df_per_capita(df1_transposed, self.population_data_lookup[scope], multiplier=1000000.0)
+                self.time_series_by_location_lookup[scope][stat][GRANULARITY_PER_CAPITA] = \
+                    compute_df_for_value_types(df_per_capita)
+                self.time_series_by_overall_lookup[scope][stat][GRANULARITY_ABSOLUTE] = \
+                    compute_df_for_value_types(df_sum)
+        pass
+
     def __read_csse_time_series_reports(self):
-        drop_columns_global = lambda df: df.drop(
-            columns=[
+        self.__read_time_series_data()
+        '''
+        drop_columns_global = [
                 CSSE_TIMESERIES_COL_GLOBAL_PROVINCE_STATE,
                 CSSE_TIMESERIES_COL_GLOBAL_LATITUDE,
-                CSSE_TIMESERIES_COL_GLOBAL_LONGITUDE],
-            inplace=True
-        )
-
-        aggregate_sums_global = lambda df: df.groupby(df[CSSE_TIMESERIES_COL_GLOBAL_COUNTRY_REGION]).aggregate('sum')
+                CSSE_TIMESERIES_COL_GLOBAL_LONGITUDE]
 
         csse_timeseries_confirmed_global_csv = self.__csse_timeseries_url + 'time_series_covid19_confirmed_global.csv'
         csse_timeseries_deaths_global_csv = self.__csse_timeseries_url + 'time_series_covid19_deaths_global.csv'
@@ -350,10 +449,10 @@ class CovidDataProcessor:
         self.df_confirmed_by_date_world, self.confirmed_totals_global = \
             self.__get_csse_time_series_data(
                 url=csse_timeseries_confirmed_global_csv,
-                dropcolumns_func=drop_columns_global,
-                aggregate_func=aggregate_sums_global,
+                drop_columns=drop_columns_global,
+                aggregate_column=CSSE_TIMESERIES_COL_GLOBAL_COUNTRY_REGION,
+                rename_locations=self.rename_countries,
                 logtext='global time series confirmed cases',
-                rename_countries=True,
                 sum_index=LOC_WORLD_OVERALL
             )
 
@@ -366,10 +465,10 @@ class CovidDataProcessor:
         self.df_deaths_by_date_world, self.deaths_totals_global = \
             self.__get_csse_time_series_data(
                 url=csse_timeseries_deaths_global_csv,
-                dropcolumns_func=drop_columns_global,
-                aggregate_func=aggregate_sums_global,
+                drop_columns=drop_columns_global,
+                aggregate_column=CSSE_TIMESERIES_COL_GLOBAL_COUNTRY_REGION,
+                rename_locations=self.rename_countries,
                 logtext='global time series deaths',
-                rename_countries=True,
                 sum_index = LOC_WORLD_OVERALL
         )
 
@@ -382,10 +481,10 @@ class CovidDataProcessor:
         self.df_recovered_by_date_world, self.recovered_totals_global = \
             self.__get_csse_time_series_data(
                 url=csse_timeseries_recovered_global_csv,
-                dropcolumns_func=drop_columns_global,
-                aggregate_func=aggregate_sums_global,
+                drop_columns=drop_columns_global,
+                aggregate_column=CSSE_TIMESERIES_COL_GLOBAL_COUNTRY_REGION,
+                rename_locations=self.rename_countries,
                 logtext='global time series recovered cases',
-                rename_countries=True,
                 sum_index = LOC_WORLD_OVERALL
         )
 
@@ -394,13 +493,12 @@ class CovidDataProcessor:
         self.time_series_by_location_lookup[SCOPE_WORLD][STAT_RECOVERED][GRANULARITY_PER_CAPITA] = compute_df_for_value_types(self.df_recovered_by_date_world_per_capita)
 
         self.time_series_by_overall_lookup[SCOPE_WORLD][STAT_RECOVERED][GRANULARITY_ABSOLUTE] = compute_df_for_value_types(self.recovered_totals_global)
-
+        '''
 
         csse_timeseries_confirmed_usa_csv = self.__csse_timeseries_url + 'time_series_covid19_confirmed_US.csv'
         csse_timeseries_deaths_usa_csv = self.__csse_timeseries_url + 'time_series_covid19_deaths_US.csv'
 
-        drop_columns_usa = lambda df: df.drop(
-            columns=[
+        drop_columns_usa = [
                 CSSE_TIMESERIES_COL_USA_COUNTRY_REGION,
                 CSSE_TIMESERIES_COL_USA_LATITUDE,
                 CSSE_TIMESERIES_COL_USA_LONGITUDE,
@@ -410,17 +508,13 @@ class CovidDataProcessor:
                 CSSE_TIMESERIES_COL_USA_CODE3,
                 CSSE_TIMESERIES_COL_USA_FIPS,
                 CSSE_TIMESERIES_COL_USA_POPULATION
-            ],
-            inplace=True,
-            errors='ignore'
-        )
-        aggregate_sums_usa = lambda df: df.groupby(df[CSSE_TIMESERIES_COL_USA_PROVINCE_STATE]).aggregate('sum')
+            ]
 
         self.df_confirmed_by_date_usa, self.confirmed_totals_usa = \
             self.__get_csse_time_series_data(
                 url=csse_timeseries_confirmed_usa_csv,
-                dropcolumns_func=drop_columns_usa,
-                aggregate_func=aggregate_sums_usa,
+                drop_columns=drop_columns_usa,
+                aggregate_column=CSSE_TIMESERIES_COL_USA_PROVINCE_STATE,
                 logtext='USA time series confirmed cases',
                 sum_index = LOC_USA_OVERALL
         )
@@ -431,8 +525,8 @@ class CovidDataProcessor:
         self.df_deaths_by_date_usa, self.deaths_totals_usa = \
             self.__get_csse_time_series_data(
                 url=csse_timeseries_deaths_usa_csv,
-                dropcolumns_func=drop_columns_usa,
-                aggregate_func=aggregate_sums_usa,
+                drop_columns=drop_columns_usa,
+                aggregate_column=CSSE_TIMESERIES_COL_USA_PROVINCE_STATE,
                 logtext='USA time series deaths',
                 sum_index = LOC_USA_OVERALL
             )
@@ -440,8 +534,7 @@ class CovidDataProcessor:
         self.time_series_by_location_lookup[SCOPE_USA][STAT_DEATHS][GRANULARITY_ABSOLUTE] = compute_df_for_value_types(self.df_deaths_by_date_usa)
         self.time_series_by_overall_lookup[SCOPE_USA][STAT_DEATHS][GRANULARITY_ABSOLUTE] = compute_df_for_value_types(self.deaths_totals_usa)
 
-        drop_columns_us_counties = lambda df: df.drop(
-            columns=[
+        drop_columns_us_counties = [
                 CSSE_TIMESERIES_COL_USA_COUNTRY_REGION,
                 CSSE_TIMESERIES_COL_USA_PROVINCE_STATE,
                 CSSE_TIMESERIES_COL_USA_LATITUDE,
@@ -453,16 +546,13 @@ class CovidDataProcessor:
                 CSSE_TIMESERIES_COL_USA_CODE3,
                 CSSE_TIMESERIES_COL_USA_FIPS,
                 CSSE_TIMESERIES_COL_USA_POPULATION
-            ],
-            inplace=True,
-            errors='ignore'
-        )
+            ]
 
 
         self.df_confirmed_by_date_us_counties, self.confirmed_totals_us_counties = \
             self.__get_csse_time_series_data(
                 url=csse_timeseries_confirmed_usa_csv,
-                dropcolumns_func=drop_columns_us_counties,
+                drop_columns=drop_columns_us_counties,
                 logtext='US counties time series confirmed cases',
                 sum_index = LOC_USA_OVERALL,
                 set_index = CSSE_TIMESERIES_COL_USA_COMBINED_KEY
@@ -474,7 +564,7 @@ class CovidDataProcessor:
         self.df_deaths_by_date_us_counties, self.deaths_totals_us_counties = \
             self.__get_csse_time_series_data(
                 url=csse_timeseries_deaths_usa_csv,
-                dropcolumns_func=drop_columns_us_counties,
+                drop_columns=drop_columns_us_counties,
                 logtext='US counties time series deaths',
                 sum_index = LOC_USA_OVERALL,
                 set_index=CSSE_TIMESERIES_COL_USA_COMBINED_KEY
@@ -500,9 +590,9 @@ class CovidDataProcessor:
         self.__read_population_data()
         self.__read_csse_daily_report()
         self.__read_csse_time_series_reports()
-        self.__check_name_lists(list(self.df_pop_world['name']), 'pop_world', list(self.df_confirmed_by_date_world.columns), 'df_world')
-        self.__check_name_lists(list(self.df_pop_us_states['state']), 'pop_us_states', list(self.df_confirmed_by_date_usa.columns), 'df_us_states')
-        self.__check_name_lists(list(self.df_pop_us_counties['Combined_Key']), 'pop_us_counties', list(self.df_confirmed_by_date_us_counties.columns), 'df_us_counties')
+        #self.__check_name_lists(list(self.population_data_lookup[SCOPE_WORLD]['name']), 'pop_world', list(self.df_confirmed_by_date_world.columns), 'df_world')
+        #self.__check_name_lists(list(self.population_data_lookup[SCOPE_WORLD]['state']), 'pop_us_states', list(self.df_confirmed_by_date_usa.columns), 'df_us_states')
+        #self.__check_name_lists(list(self.population_data_lookup[SCOPE_WORLD]['Combined_Key']), 'pop_us_counties', list(self.df_confirmed_by_date_us_counties.columns), 'df_us_counties')
         pass
 
     def get_geojson(self, scope):
