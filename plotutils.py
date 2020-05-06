@@ -88,7 +88,7 @@ def discrete_colorscale(bvals, colors, logarithmic=False, shorten_ticktext=True)
 
 def get_choropleth_mapbox(geojson, locations, z, hovertext,  mapbox_token,
                           color_boundaries, color_min, color_max,
-                          name=None, logarithmic=False, featureid_key=None):
+                          name=None, logarithmic=False, featureid_key=None, logger=None):
     """
     geojson - geojson in dict format
     locations - list of locations matching those in the geoJSON for which data values needs to be plotted
@@ -101,6 +101,8 @@ def get_choropleth_mapbox(geojson, locations, z, hovertext,  mapbox_token,
     featureid_key - geoJSON key to map to location names instead of the default id
     returns a choropleth mapbox with the specified parameters
     """
+    if logger is not None:
+        logger.warning('start map construction')
     color_boundaries = sorted(color_boundaries)
     colors = interpolated_colors(color_min, color_max, len(color_boundaries)-1)
     colorscale, tickvals, ticktext, zmin, zmax = discrete_colorscale(color_boundaries, colors, logarithmic)
@@ -120,7 +122,7 @@ def get_choropleth_mapbox(geojson, locations, z, hovertext,  mapbox_token,
             zmax=zmax,
             marker_line_width=0,
             marker_line_color='white',
-            marker_opacity=0.5,
+            marker_opacity=0.8,
             text=hovertext,
             hoverinfo='text'))
 
@@ -129,13 +131,15 @@ def get_choropleth_mapbox(geojson, locations, z, hovertext,  mapbox_token,
     fig.update_layout(
         title=name,
         mapbox=dict(
-            style='streets',
+            style='outdoors',
             accesstoken=mapbox_token,
-            zoom=2,
+            zoom=3,
             center={"lat": 37.0902, "lon": -95.7129}
         )
     )
     fig.update_layout(margin={"r": 10, "t": 10, "l": 10, "b": 10})
+    if logger is not None:
+        logger.warning('end map construction')
     return fig
 
 
@@ -162,8 +166,8 @@ def get_scattermapbox(latitudes, longitudes, hovertext, marker_sizes, marker_siz
             ),
         ),
         mapbox=dict(
-            style='dark',
-            accesstoken=mapbox_token,
+            style='open-street-map',
+            #accesstoken=mapbox_token,
             bearing=0,
             center=dict(
                 lat=center_lat,

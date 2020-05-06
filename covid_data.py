@@ -87,7 +87,7 @@ def get_stat_types():
     return [STAT_CONFIRMED, STAT_DEATHS, STAT_RECOVERED, STAT_ACTIVE]
 
 def get_scope_types():
-    return [SCOPE_WORLD, SCOPE_USA, SCOPE_US_COUNTIES]
+    return [SCOPE_WORLD, SCOPE_USA]
 
 def get_location_overall(scope):
     if scope == SCOPE_WORLD:
@@ -161,7 +161,7 @@ class CovidDataProcessor:
 
     __geojson_world_countries_url = './data/countries.geo.json'
     __geojson_us_states_url = './data/us_states_500k_res.json'
-    __geojson_us_counties_url = './data/us_counties_500k_res.json'
+    __geojson_us_counties_url = './data/us_counties_2010.json' #'./data/us_counties_500k_res.json'
 
     __population_world_url = './data/world_population.csv'
     __population_us_states_url = './data/us_states_population.csv'
@@ -490,7 +490,7 @@ class CovidDataProcessor:
                     compute_df_per_capita(df1_transposed, self.population_data_lookup[scope],
                                           location_column=popdata_loc_column,
                                           population_column=popdata_pop_column,
-                                          multiplier=1000000.0)
+                                          multiplier=per_capita_multiplier)
                 self.time_series_by_location_lookup[scope][stat][GRANULARITY_PER_CAPITA] = \
                     compute_df_for_value_types(df_per_capita)
                 self.time_series_by_overall_lookup[scope][stat][GRANULARITY_ABSOLUTE] = \

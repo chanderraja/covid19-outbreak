@@ -1,4 +1,5 @@
 import dash
+import logging
 from dash.dependencies import Input, Output, State
 import dash_html_components as html
 import dash_core_components as dcc
@@ -22,6 +23,13 @@ supported_stats = [STAT_CONFIRMED, STAT_DEATHS]
 # =============================================================================
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.FLATLY])
 server = app.server
+ch = logging.StreamHandler()
+ch.setLevel(logging.DEBUG)
+# create formatter and add it to the handlers
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+ch.setFormatter(formatter)
+# add the handlers to logger
+app.logger.addHandler(ch)
 
 # widget IDS
 MAX_COMPARE_LOCS=5
@@ -87,7 +95,23 @@ def get_chart_controls(scope):
                 dbc.CardHeader(
                 [
                     dbc.Label(f'Select up to {MAX_COMPARE_LOCS} locations to compare'),
-                    html.Div(dcc.Dropdown(id=ID_DROPDOWN_LOC), id=ID_DROPDOWN_LOC_DIV),
+                    html.Div([dcc.Dropdown(id=ID_DROPDOWN_LOC)],
+                             id=ID_DROPDOWN_LOC_DIV,
+                             ),
+                    dbc.Button(
+                        f'Add top {MAX_COMPARE_LOCS} locations for confirmed cases',
+                        id=ID_BUTTON_SELECT_TOP_CONFIRMED,
+                        size='lg',
+                        color='primary',
+                        block=True
+                    ),
+                    dbc.Button(
+                        f'Add top {MAX_COMPARE_LOCS} locations for deaths',
+                        id=ID_BUTTON_SELECT_TOP_DEATHS,
+                        size='lg',
+                        color='primary',
+                        block=True
+                    ),
                     html.Br(),
                     dbc.FormGroup([
                         dbc.Label('Time Chart Settings'),
@@ -224,7 +248,7 @@ dashboard = dbc.Navbar(
             dcc.Dropdown(
                 id=ID_DROPDOWN_SCOPE,
                 options=[{'label': i, 'value': i} for i in get_scope_types()],
-                value=SCOPE_WORLD,
+                value=get_scope_types()[0],
                 clearable=False,
                 persistence=True,
             ), width=4
@@ -236,7 +260,7 @@ dashboard = dbc.Navbar(
 
 
 def serve_layout():
-    scope = SCOPE_WORLD
+    scope = get_scope_types()[0]
     layout = dbc.Container(
         [
             dashboard,
@@ -307,22 +331,45 @@ def register_collapse_controls_callback():
 
 register_collapse_controls_callback()
 
+
+
+def add_locs(locs, add_locs):
+    if locs is None:
+        return add_locs
+    s_locs = set(locs)
+    for l in add_locs:
+        if l not in s_locs:
+            s_locs.add(l)
+    return list(s_locs)
+
 @app.callback(
     Output(ID_DROPDOWN_LOC_DIV, 'children'),
-    [Input(ID_DROPDOWN_SCOPE, 'value')],
-    [State(ID_RADIOITEMS_TIMECHART_SETTINGS, 'value')]
+    [Input(ID_DROPDOWN_SCOPE, 'value'),
+    Input(ID_BUTTON_SELECT_TOP_DEATHS, 'n_clicks'),
+    Input(ID_BUTTON_SELECT_TOP_CONFIRMED, 'n_clicks')],
+    [State(ID_RADIOITEMS_TIMECHART_SETTINGS, 'value'),
+     State(ID_DROPDOWN_LOC, 'value')]
 )
-def show_dropdown(scope, value_type):
+def show_dropdown(scope, n_clicks1, n_clicks2, value_type, selected_locs):
+    if scope is None or value_type is None:
+        raise PreventUpdate
+    ctx = dash.callback_context
+    triggered_input = ctx.triggered[0]['prop_id'].split('.')[0]
+
     locs = dataproc.get_all_locations(scope)
     options = [{'label': v, 'value': v} for v in locs]
-    df = dataproc.get_top_locations(scope, stat, value_type=value_type, n=MAX_COMPARE_LOCS)
-    selected_locs = list(df.index)
+    if triggered_input == ID_BUTTON_SELECT_TOP_CONFIRMED:
+        df = dataproc.get_top_locations(scope, stat=STAT_CONFIRMED, value_type=value_type, n=MAX_COMPARE_LOCS)
+        selected_locs = add_locs(selected_locs, list(df.index))
+    elif triggered_input == ID_BUTTON_SELECT_TOP_DEATHS:
+        df = dataproc.get_top_locations(scope, stat=STAT_DEATHS, value_type=value_type, n=MAX_COMPARE_LOCS)
+        selected_locs = add_locs(selected_locs, list(df.index))
     return dcc.Dropdown(
         id=ID_DROPDOWN_LOC,
         options=options,
         value=selected_locs,
         multi=True,
-        persistence_type='local',
+        persistence_type='session',
         persistence=scope
     )
 
@@ -400,23 +447,3 @@ def map_callback(scope):
 if __name__ == '__main__':
     app.run_server(debug=False, port=8888)
 
-
-'''
-                    
-                    dbc.Button(
-                        f'Click to compare the top {MAX_COMPARE_LOCS} locations for Covid-19 confirmed cases',
-                        id=ID_BUTTON_SELECT_TOP_CONFIRMED,
-                        size='lg',
-                        color='primary',
-                        block=True
-                    ),
-                    dbc.Button(
-                        f'Click to compare the top {MAX_COMPARE_LOCS} locations for Covid-19 deaths',
-                        id=ID_BUTTON_SELECT_TOP_DEATHS,
-                        size='lg',
-                        color='primary',
-                        block=True
-                    ),
-                    html.Br(),
-
-'''
