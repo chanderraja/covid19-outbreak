@@ -25,15 +25,12 @@ STAT_DEATHS='Deaths'
 STAT_RECOVERED='Recovered'
 STAT_ACTIVE='Active'
 
-
-# Granularity
-GRANULARITY_ABSOLUTE=0
-GRANULARITY_PER_CAPITA=1
-
 # Stat value types
 VALUE_TYPE_CUMULATIVE=0
 VALUE_TYPE_DAILY_DIFF=1
 VALUE_TYPE_DAILY_PERCENT_CHANGE=2
+VALUE_TYPE_PER_CAPITA=3
+VALUE_TYPE_ONE_PER_N=4
 
 # Data frame columns
 
@@ -77,6 +74,7 @@ IMPORT_CFG_AGGREGATE_COLUMN='aggregate_column'  # key to a column to aggregate v
 IMPORT_CFG_RENAME_LOCATIONS='rename'            # key to a dict with key=current name and value=string to rename as
 IMPORT_CFG_SET_INDEX='set_index'                # key to a column to set the data frame index to
 IMPORT_CFG_POPULATION_DATA='population'         # key to a dict containing configuration to read population data
+IMPORT_CFG_POPULATION_URL='url'                        # key to a dict containing configuration to read population data
 IMPORT_CFG_POPULATION_LOCATION_COLUMN='location_column'     # key to a string representing the location column in the population DF
 IMPORT_CFG_POPULATION_POPULATION_COLUMN='population_column' # key to a string representing the population column in the population DF
 IMPORT_CFG_PER_CAPITA_MULTIPLIER='per_capita_multiplier'    # key to a value representing the per capita multiplier.
@@ -98,29 +96,11 @@ def get_location_overall(scope):
         return LOC_USA_OVERALL
     return 'Not implemented'
 
-def get_granularity_types():
-    return [GRANULARITY_ABSOLUTE, GRANULARITY_PER_CAPITA]
-
 def get_value_types():
     return [VALUE_TYPE_CUMULATIVE, VALUE_TYPE_DAILY_DIFF, VALUE_TYPE_DAILY_PERCENT_CHANGE]
 
-def compute_df_for_value_types(df):
-    """
-    Compute data frames for all supported value types from a time series dataframe and return as a dict indexed by
-    value type
-    :param df: time series dataframe
-    :return: dict of data frames indexed by value types
-    """
-    d = dict()
-    d[VALUE_TYPE_CUMULATIVE] = df
-    d[VALUE_TYPE_DAILY_DIFF] = df.diff()
-    df1 = df.pct_change() * 100
-    df1 = df1.replace([np.inf, -np.inf], np.nan)
-    d[VALUE_TYPE_DAILY_PERCENT_CHANGE] = df1
-    return d
-
 def compute_df_per_capita(df, df_population, location_column, population_column, multiplier=1000000.0):
-    df_per_capita = df
+    df_per_capita = df.copy()
     for location in df_per_capita:
         found = df_population.query(f'{location_column} == "{location}"')[population_column]
         if found.count() == 0:
@@ -129,6 +109,18 @@ def compute_df_per_capita(df, df_population, location_column, population_column,
         population = found.values[0]
         df_per_capita[location] = (df_per_capita[location] * multiplier)/population
     return df_per_capita
+
+def compute_df_one_per_n(df, df_population, location_column, population_column):
+    df_one_per_n = df.copy()
+    for location in df_one_per_n:
+        found = df_population.query(f'{location_column} == "{location}"')[population_column]
+        if found.count() == 0:
+            df_one_per_n.drop(location, axis=1, inplace=True)
+            continue
+        population = found.values[0]
+        df_one_per_n[location] = population/df_one_per_n[location]
+    df_one_per_n.replace([np.inf, -np.inf], np.nan)
+    return df_one_per_n
 
 
 def get_location(row):
@@ -214,10 +206,10 @@ class CovidDataProcessor:
 
     population_data_lookup = {
     }
-
     time_series_data_config = {
         SCOPE_WORLD: {
             IMPORT_CFG_POPULATION_DATA: {
+                IMPORT_CFG_POPULATION_URL: __population_world_url,
                 IMPORT_CFG_POPULATION_LOCATION_COLUMN: 'name',
                 IMPORT_CFG_POPULATION_POPULATION_COLUMN: 'population',
             },
@@ -238,6 +230,7 @@ class CovidDataProcessor:
 
         SCOPE_USA: {
             IMPORT_CFG_POPULATION_DATA: {
+                IMPORT_CFG_POPULATION_URL: __population_us_states_url,
                 IMPORT_CFG_POPULATION_LOCATION_COLUMN: 'state',
                 IMPORT_CFG_POPULATION_POPULATION_COLUMN: 'population',
             },
@@ -262,6 +255,7 @@ class CovidDataProcessor:
 
         SCOPE_US_COUNTIES: {
             IMPORT_CFG_POPULATION_DATA: {
+                IMPORT_CFG_POPULATION_URL: __population_us_counties_url,
                 IMPORT_CFG_POPULATION_LOCATION_COLUMN: 'Combined_Key',
                 IMPORT_CFG_POPULATION_POPULATION_COLUMN: 'Population',
             },
@@ -283,6 +277,7 @@ class CovidDataProcessor:
                 CSSE_TIMESERIES_COL_USA_POPULATION
             ],
             IMPORT_CFG_SET_INDEX: CSSE_TIMESERIES_COL_USA_COMBINED_KEY,
+            IMPORT_CFG_PER_CAPITA_MULTIPLIER: 1000.0
         }
     }
 
@@ -303,9 +298,6 @@ class CovidDataProcessor:
             for stat in get_stat_types():
                 self.time_series_by_location_lookup[scope][stat] = dict()
                 self.time_series_by_overall_lookup[scope][stat] = dict()
-                for granularity in get_granularity_types():
-                    self.time_series_by_location_lookup[scope][stat][granularity] = dict()
-                    self.time_series_by_overall_lookup[scope][stat][granularity] = dict()
 
     def __read_world_countries_geojson(self):
         with open(self.__geojson_world_countries_url) as f:
@@ -338,14 +330,6 @@ class CovidDataProcessor:
                 if self.logger is not None:
                     self.logger.warning(f'{country} not found in dataset')
                 continue
-
-    def __read_population_data(self):
-        df_pop_world = pd.read_csv(self.__population_world_url)
-        self.population_data_lookup[SCOPE_WORLD] = df_pop_world
-        df_pop_us_states = pd.read_csv(self.__population_us_states_url)
-        self.population_data_lookup[SCOPE_USA] = df_pop_us_states
-        df_pop_us_counties = pd.read_csv(self.__population_us_counties_url)
-        self.population_data_lookup[SCOPE_US_COUNTIES] = df_pop_us_counties
 
     def __read_csse_daily_report(self):
         today = dt.datetime.today()
@@ -428,6 +412,29 @@ class CovidDataProcessor:
         df1_transposed.index = pd.to_datetime(df1_transposed.index)
         return df1_transposed, df_sum
 
+    def compute_df_for_value_types(self, df, df_pop=None, loc_column=None, pop_column=None, multiplier=None):
+        """
+        Compute data frames for all supported value types from a time series dataframe and return as a dict indexed by
+        value type
+        :param df: time series dataframe
+        :return: dict of data frames indexed by value types
+        """
+        d = dict()
+        d[VALUE_TYPE_CUMULATIVE] = df
+        d[VALUE_TYPE_DAILY_DIFF] = df.diff()
+        df1 = df.pct_change() * 100
+        df1 = df1.replace([np.inf, -np.inf], np.nan)
+        d[VALUE_TYPE_DAILY_PERCENT_CHANGE] = df1
+        if df_pop is not None:
+            d[VALUE_TYPE_PER_CAPITA] = compute_df_per_capita(df, df_pop,
+                                  location_column=loc_column,
+                                  population_column=pop_column,
+                                  multiplier=multiplier)
+            d[VALUE_TYPE_ONE_PER_N] = compute_df_one_per_n(df, df_pop,
+                                  location_column=loc_column,
+                                  population_column=pop_column)
+        return d
+
     def __read_time_series_data(self):
         cfg = self.time_series_data_config
         for scope in get_scope_types():
@@ -439,8 +446,14 @@ class CovidDataProcessor:
             popdata_loc_column = 'name'
             popdata_cfg = cfg_scope.get(IMPORT_CFG_POPULATION_DATA)
             if popdata_cfg is not None:
+                pop_data_url = popdata_cfg[IMPORT_CFG_POPULATION_URL]
                 popdata_loc_column = popdata_cfg[IMPORT_CFG_POPULATION_LOCATION_COLUMN]
                 popdata_pop_column = popdata_cfg[IMPORT_CFG_POPULATION_POPULATION_COLUMN]
+                self.logger.info(f'reading {scope} population data from {pop_data_url}...')
+                df_pop = pd.read_csv(pop_data_url)
+                df_pop.loc['Total'] = df_pop.sum(numeric_only=True, axis=0)
+                df_pop.at['Total', popdata_loc_column] = get_location_overall(scope)
+
             urls = cfg_scope.get(IMPORT_CFG_URLS)
             if urls is None:
                 self.logger.error(f'{log_prefix}No URL section found in config, skipping...')
@@ -458,7 +471,6 @@ class CovidDataProcessor:
                 if url is None:
                     self.logger.error(f'{log_prefix2}No URL found for this statistic, skipping...')
                     continue
-
                 # read data file into a data frame
                 self.logger.info(f'scope={scope} stat={stat}: Reading raw data from {url}...')
                 df = pd.read_csv(url)
@@ -484,17 +496,18 @@ class CovidDataProcessor:
                 df1_transposed = df.transpose()
                 df1_transposed.index = pd.to_datetime(df1_transposed.index)
 
-                self.time_series_by_location_lookup[scope][stat][GRANULARITY_ABSOLUTE] = \
-                    compute_df_for_value_types(df1_transposed)
-                df_per_capita = \
-                    compute_df_per_capita(df1_transposed, self.population_data_lookup[scope],
-                                          location_column=popdata_loc_column,
-                                          population_column=popdata_pop_column,
-                                          multiplier=per_capita_multiplier)
-                self.time_series_by_location_lookup[scope][stat][GRANULARITY_PER_CAPITA] = \
-                    compute_df_for_value_types(df_per_capita)
-                self.time_series_by_overall_lookup[scope][stat][GRANULARITY_ABSOLUTE] = \
-                    compute_df_for_value_types(df_sum)
+                self.time_series_by_location_lookup[scope][stat] = \
+                    self.compute_df_for_value_types(df1_transposed,
+                                                    df_pop=df_pop,
+                                                    loc_column=popdata_loc_column,
+                                                    pop_column=popdata_pop_column,
+                                                    multiplier=per_capita_multiplier)
+                self.time_series_by_overall_lookup[scope][stat]= \
+                    self.compute_df_for_value_types(df_sum,
+                                                    df_pop=df_pop,
+                                                    loc_column=popdata_loc_column,
+                                                    pop_column=popdata_pop_column,
+                                                    multiplier=per_capita_multiplier)
         pass
 
     def __read_csse_time_series_reports(self):
@@ -514,7 +527,6 @@ class CovidDataProcessor:
         self.__read_world_countries_geojson()
         self.__read_us_states_geojson()
         self.__read_us_counties_geojson()
-        self.__read_population_data()
         self.__read_csse_daily_report()
         self.__read_time_series_data()
         self.__read_csse_time_series_reports()
@@ -536,12 +548,11 @@ class CovidDataProcessor:
         else:
             return None
 
-    def get_stat_by_date_df(self, scope, stat, granularity=GRANULARITY_ABSOLUTE, value_type=VALUE_TYPE_CUMULATIVE, overall=False):
+    def get_stat_by_date_df(self, scope, stat, value_type=VALUE_TYPE_CUMULATIVE, overall=False):
         """
         return dataframe containing stat by date
         :param scope: SCOPE_WORLD or other defined scope
         :param stat: stat to return in dataframe (STAT_CONFIRMED, STAT_DEATHS etc)
-        :param granularity: e.g. GRANULARITY_ABSOLUTE, GRANULARITY_PER_CAPITA
         :param: value_type: e.g. VALUE_TYPE_CUMULATIVE, VALUE_TYPE_DAILY_CHANGE etc
         :param: overall: if true get stats for overall location given by scope else get stats broken down by sub locations
         :return: dataframe containing requested stats per location (defined by scope) by date
@@ -554,34 +565,34 @@ class CovidDataProcessor:
         if stat not in stat_lookup:
             self.logger.error(f'No data found for stat={stat} under scope={scope}')
             return None
-        granularity_lookup = stat_lookup[stat]
-        if granularity not in granularity_lookup:
-            self.logger.error(f'No data found for granularity={granularity} under scope={scope} and stat={stat}')
-            return None
-        value_type_lookup = granularity_lookup[granularity]
+        value_type_lookup = stat_lookup[stat]
         if value_type not in value_type_lookup:
             self.logger.error(f'No data found for stat={stat}, scope={scope}, value_type={value_type}')
             return None
         df = value_type_lookup[value_type]
         return df
 
-    def get_latest_stat(self, stat, scope, granularity=GRANULARITY_ABSOLUTE, loc=None):
+    def get_latest_stat(self, stat, scope, loc=None):
         """
 
         :param scope:
         :param location:
         :return:
         """
-        df = self.get_stat_by_date_df(scope, stat, granularity=granularity, value_type=VALUE_TYPE_CUMULATIVE, overall=(loc is None))
-        df_diff = self.get_stat_by_date_df(scope, stat, granularity=granularity, value_type=VALUE_TYPE_DAILY_DIFF, overall=(loc is None))
-        df_pct_change = self.get_stat_by_date_df(scope, stat, granularity=granularity, value_type=VALUE_TYPE_DAILY_PERCENT_CHANGE, overall=(loc is None))
+        df = self.get_stat_by_date_df(scope, stat, value_type=VALUE_TYPE_CUMULATIVE, overall=(loc is None))
+        df_diff = self.get_stat_by_date_df(scope, stat, value_type=VALUE_TYPE_DAILY_DIFF, overall=(loc is None))
+        df_pct_change = self.get_stat_by_date_df(scope, stat, value_type=VALUE_TYPE_DAILY_PERCENT_CHANGE, overall=(loc is None))
+        df_per_capita = self.get_stat_by_date_df(scope, stat, value_type=VALUE_TYPE_PER_CAPITA, overall=(loc is None))
+        df_one_per_n = self.get_stat_by_date_df(scope, stat, value_type=VALUE_TYPE_ONE_PER_N, overall=(loc is None))
         latest_date = df.index.max()
         if loc is None:
             loc = get_location_overall(scope)
         value = df.loc[latest_date, loc]
         pct_change = df_pct_change.loc[latest_date, loc]
         diff = df_diff.loc[latest_date, loc]
-        return value, diff, pct_change
+        per_capita = df_per_capita.loc[latest_date, loc]
+        one_per_n = df_one_per_n.loc[latest_date, loc]
+        return value, diff, pct_change, per_capita, one_per_n
 
 
     def get_df_daily_report(self, scope):
@@ -613,7 +624,7 @@ class CovidDataProcessor:
         df = self.get_stat_by_date_df(scope, stat=stat)
         return df.columns
 
-    def get_top_locations(self, scope, stat, granularity=GRANULARITY_ABSOLUTE, value_type=VALUE_TYPE_CUMULATIVE, n=10):
+    def get_top_locations(self, scope, stat, value_type=VALUE_TYPE_CUMULATIVE, n=10):
         df = self.get_stat_by_date_df(scope, stat, value_type=value_type)
         latest_date = df.index.max()
         latest_series = df.loc[latest_date]

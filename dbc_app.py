@@ -8,9 +8,8 @@ from dash.exceptions import PreventUpdate
 from covid_data import CovidDataProcessor, SCOPE_WORLD, SCOPE_USA, SCOPE_US_COUNTIES
 from covid_data import get_scope_types, get_location_overall
 from covid_data import STAT_CONFIRMED, STAT_DEATHS, STAT_RECOVERED, STAT_ACTIVE
-from covid_data import GRANULARITY_ABSOLUTE, GRANULARITY_PER_CAPITA
 from tab_common import get_time_series_scatter_chart, get_top_locations_bar_chart
-from tab_common import VALUE_TYPE_CUMULATIVE, VALUE_TYPE_DAILY_DIFF, VALUE_TYPE_DAILY_PERCENT_CHANGE
+from covid_data import VALUE_TYPE_CUMULATIVE, VALUE_TYPE_DAILY_DIFF, VALUE_TYPE_DAILY_PERCENT_CHANGE, VALUE_TYPE_PER_CAPITA
 
 from tab_world import get_choropleth_mapbox_world
 from tab_usa import get_choropleth_mapbox_usa
@@ -81,13 +80,6 @@ def get_map(scope):
         return None
     return map
 
-
-def get_location_options(scope):
-    granularity = GRANULARITY_PER_CAPITA if scope == SCOPE_WORLD else GRANULARITY_ABSOLUTE
-    df = dataproc.get_stat_by_date_df(scope, stat=STAT_CONFIRMED, granularity=granularity)
-    options = [{'label': i, 'value': i} for i in df.columns]
-    return options
-
 def get_chart_controls(scope):
     return dbc.Collapse(
         [
@@ -120,7 +112,8 @@ def get_chart_controls(scope):
                             options=[
                                 dict(label='Cumulative', value=VALUE_TYPE_CUMULATIVE),
                                 dict(label='Daily change (absolute)', value=VALUE_TYPE_DAILY_DIFF),
-                                dict(label='Daily change (percentage)', value=VALUE_TYPE_DAILY_PERCENT_CHANGE)
+                                dict(label='Daily change (percentage)', value=VALUE_TYPE_DAILY_PERCENT_CHANGE),
+                                dict(label='Per capita', value=VALUE_TYPE_PER_CAPITA)
                             ],
                             value = VALUE_TYPE_CUMULATIVE,
                             labelStyle={'display': 'block'},
@@ -153,12 +146,13 @@ def get_top_n_chart_id(stat):
 
 def get_stat_header_col_text(scope, stat, value_type=VALUE_TYPE_CUMULATIVE):
     # get overall stats
-    value, diff, pct_change = dataproc.get_latest_stat(stat, scope)
+    value, diff, pct_change, per_capita, one_per_n = dataproc.get_latest_stat(stat, scope)
     diff_arrow = lambda diff: f'\u21e7' if diff > 0 else f'\u21e9'
     arrow = diff_arrow(diff)
-    formatted_value = f'{value:,} {stat}'
+    formatted_value = f'{value:,.0f} (1 in {one_per_n:,.0f})'
     formatted_diff = f'{diff:+,.0f} ({pct_change:+.2f}%) {arrow} past 24h'
     col1 = dbc.Col([
+        html.H2(f'{stat}', className='alert-heading'),
         html.H2(f'{formatted_value}', className='alert-heading'),
         html.H4(f'{formatted_diff}'),
     ], width=4)
@@ -174,10 +168,10 @@ def get_stat_header_col_text(scope, stat, value_type=VALUE_TYPE_CUMULATIVE):
     num_rows = 0
     col2_subcols = []
     for loc in locs:
-        value, diff, pct_change = dataproc.get_latest_stat(stat, scope, loc=loc)
+        value, diff, pct_change, per_capita, one_per_n = dataproc.get_latest_stat(stat, scope, loc=loc)
         arrow = diff_arrow(diff)
         formatted_loc = f'{loc}'
-        formatted_value = f'{value:,}'
+        formatted_value = f'{value:,.0f} (1 in {one_per_n:,.0f})'
         formatted_diff = f'{diff:+,.0f} ({pct_change:+.2f}%) {arrow}'
         textlist.append(html.H6(formatted_loc))
         textlist.append(html.H6(formatted_value))
