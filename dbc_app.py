@@ -36,6 +36,8 @@ NUM_LOCATIONS_TRENDING=10
 ID_DROPDOWN_SCOPE='id-dropdown-scope'
 ID_DROPDOWN_LOC= 'id-dropdown-loc'
 ID_DROPDOWN_LOC_DIV= ID_DROPDOWN_LOC + '-div'
+ID_DROPDOWN_LOC2= 'id-dropdown-loc2'
+ID_DROPDOWN_LOC2_DIV= ID_DROPDOWN_LOC2 + '-div'
 ID_COLLAPSE_LOC='id-collapse-loc'
 ID_BUTTON_SELECT_TOP_CONFIRMED= 'id-button-select-top-confirmed'
 ID_BUTTON_SELECT_TOP_DEATHS= 'id-button-select-top-deaths'
@@ -211,25 +213,19 @@ def get_stat_card(scope, stat, value_type=VALUE_TYPE_CUMULATIVE):
 
 
 def get_stat_charts_ui(scope, value_type=VALUE_TYPE_CUMULATIVE):
-    ui =    \
-    [
-        dbc.Row([
-            dbc.Col(get_chart_controls(scope))],
-            align='center',
-            justify='left'
-        )
-    ]
-
+    rows = []
+    rows.append(dbc.Row([dbc.Col(get_chart_controls(scope))], align='center', justify='left'))
     cols = lambda scope, stat, value_type: dbc.Col(get_stat_card(scope, stat, value_type))
+    rows += [dbc.Row(cols(scope, x, value_type), justify='left') for x in supported_stats]
+    return rows
 
-    ui += \
-    [
-        dbc.Row(cols(scope, x, value_type), justify='left') for x in supported_stats
-    ]
-    return ui
-
-
-dbc.Label(f'Select Scope'),
+def get_location_stats_ui(scope):
+    locs = dataproc.get_all_locations(scope)
+    rows = []
+    rows.append(
+        html.Div([dcc.Dropdown(id=ID_DROPDOWN_LOC2)],
+                 id=ID_DROPDOWN_LOC2_DIV))
+    return rows
 
 dashboard = dbc.Navbar(
     [
@@ -260,10 +256,11 @@ def serve_layout():
             dashboard,
             html.Hr(),
             dbc.Row([
-                dbc.Col(get_stat_charts_ui(scope), lg=12)
+                dbc.Col(get_stat_charts_ui(scope=scope), lg=12)
             ]),
             dbc.Row([
                 dbc.Col(dbc.Card([dcc.Loading(dcc.Graph(id=ID_MAPBOX))]), lg=8),
+                dbc.Col(get_location_stats_ui(scope=scope), lg=4),
             ], align='center', justify='center'),
         ], fluid=True,
     )
