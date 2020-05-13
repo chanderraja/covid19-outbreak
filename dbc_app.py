@@ -38,6 +38,7 @@ ID_DROPDOWN_LOC= 'id-dropdown-loc'
 ID_DROPDOWN_LOC_DIV= ID_DROPDOWN_LOC + '-div'
 ID_DROPDOWN_LOC2= 'id-dropdown-loc2'
 ID_DROPDOWN_LOC2_DIV= ID_DROPDOWN_LOC2 + '-div'
+ID_SINGLE_LOC_STAT_DIV='id-single-loc-stat-div'
 ID_COLLAPSE_LOC='id-collapse-loc'
 ID_BUTTON_SELECT_TOP_CONFIRMED= 'id-button-select-top-confirmed'
 ID_BUTTON_SELECT_TOP_DEATHS= 'id-button-select-top-deaths'
@@ -220,12 +221,16 @@ def get_stat_charts_ui(scope, value_type=VALUE_TYPE_CUMULATIVE):
     return rows
 
 def get_location_stats_ui(scope):
-    locs = dataproc.get_all_locations(scope)
-    rows = []
-    rows.append(
-        html.Div([dcc.Dropdown(id=ID_DROPDOWN_LOC2)],
-                 id=ID_DROPDOWN_LOC2_DIV))
-    return rows
+    return dbc.Card([
+        dbc.CardHeader([
+            dbc.Label(f'Select a location'),
+            html.Div([dcc.Dropdown(id=ID_DROPDOWN_LOC2)], id=ID_DROPDOWN_LOC2_DIV)
+        ]),
+        dbc.CardBody([
+
+        ], id=ID_SINGLE_LOC_STAT_DIV)
+    ])
+
 
 dashboard = dbc.Navbar(
     [
@@ -334,7 +339,8 @@ def add_locs(locs, add_locs):
     return list(s_locs)
 
 @app.callback(
-    Output(ID_DROPDOWN_LOC_DIV, 'children'),
+    [Output(ID_DROPDOWN_LOC_DIV, 'children'),
+    Output(ID_DROPDOWN_LOC2_DIV, 'children')],
     [Input(ID_DROPDOWN_SCOPE, 'value'),
     Input(ID_BUTTON_SELECT_TOP_DEATHS, 'n_clicks'),
     Input(ID_BUTTON_SELECT_TOP_CONFIRMED, 'n_clicks')],
@@ -347,7 +353,8 @@ def show_dropdown(scope, n_clicks1, n_clicks2, value_type, selected_locs):
     ctx = dash.callback_context
     triggered_input = ctx.triggered[0]['prop_id'].split('.')[0]
 
-    locs = dataproc.get_all_locations(scope)
+    df = dataproc.get_top_locations(scope, stat=STAT_CONFIRMED)
+    locs = list(df.index)
     options = [{'label': v, 'value': v} for v in locs]
     if triggered_input == ID_BUTTON_SELECT_TOP_CONFIRMED:
         df = dataproc.get_top_locations(scope, stat=STAT_CONFIRMED, value_type=value_type, n=MAX_COMPARE_LOCS)
@@ -355,7 +362,7 @@ def show_dropdown(scope, n_clicks1, n_clicks2, value_type, selected_locs):
     elif triggered_input == ID_BUTTON_SELECT_TOP_DEATHS:
         df = dataproc.get_top_locations(scope, stat=STAT_DEATHS, value_type=value_type, n=MAX_COMPARE_LOCS)
         selected_locs = add_locs(selected_locs, list(df.index))
-    return dcc.Dropdown(
+    dropdown1 = dcc.Dropdown(
         id=ID_DROPDOWN_LOC,
         options=options,
         value=selected_locs,
@@ -363,6 +370,16 @@ def show_dropdown(scope, n_clicks1, n_clicks2, value_type, selected_locs):
         persistence_type='session',
         persistence=scope
     )
+
+    dropdown2 = dcc.Dropdown(
+        id=ID_DROPDOWN_LOC2,
+        options=options,
+        multi=False,
+        persistence_type='session',
+        persistence=scope
+    )
+
+    return [dropdown1, dropdown2]
 
 '''
 def process_location_dropdown_options(locations, scope):
@@ -434,6 +451,29 @@ for stat in supported_stats:
 def map_callback(scope):
     return get_map(scope)
 
+
+
+@app.callback(
+    Output(ID_SINGLE_LOC_STAT_DIV, 'children'),
+    [Input(ID_DROPDOWN_SCOPE, 'value'),
+     Input(ID_DROPDOWN_LOC2, 'value')]
+)
+def single_loc_stat_callback(scope, location):
+    rows = []
+    stat = STAT_CONFIRMED
+    value, diff, pct_change, per_capita, one_per_n = dataproc.get_latest_stat(stat, scope=scope, loc=location)
+    diff_arrow = lambda diff: f'\u21e7' if diff > 0 else f'\u21e9'
+    arrow = diff_arrow(diff)
+    formatted_value = f'{value:,.0f} (1 in {one_per_n:,.0f})'
+    formatted_diff = f'{diff:+,.0f} ({pct_change:+.2f}%) {arrow} past 24h'
+    col1 = dbc.Col([
+        html.H2(f'{stat}', className='alert-heading'),
+        html.H2(f'{formatted_value}', className='alert-heading'),
+        html.H4(f'{formatted_diff}'),
+    ])
+
+    rows.append(col1)
+    return rows
 
 if __name__ == '__main__':
     app.run_server(debug=False, port=8888)

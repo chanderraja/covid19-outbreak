@@ -624,8 +624,10 @@ class CovidDataProcessor:
         df = self.get_stat_by_date_df(scope, stat=stat)
         return df.columns
 
-    def get_top_locations(self, scope, stat, value_type=VALUE_TYPE_CUMULATIVE, n=10):
+    def get_top_locations(self, scope, stat, value_type=VALUE_TYPE_CUMULATIVE, n=0):
         df = self.get_stat_by_date_df(scope, stat, value_type=value_type)
+        if n == 0:
+            n = df.shape[0]
         latest_date = df.index.max()
         latest_series = df.loc[latest_date]
         return latest_series.nlargest(n=n)
