@@ -345,9 +345,10 @@ def add_locs(locs, add_locs):
     Input(ID_BUTTON_SELECT_TOP_DEATHS, 'n_clicks'),
     Input(ID_BUTTON_SELECT_TOP_CONFIRMED, 'n_clicks')],
     [State(ID_RADIOITEMS_TIMECHART_SETTINGS, 'value'),
-     State(ID_DROPDOWN_LOC, 'value')]
+     State(ID_DROPDOWN_LOC, 'value'),
+     State(ID_DROPDOWN_LOC2, 'value')]
 )
-def show_dropdown(scope, n_clicks1, n_clicks2, value_type, selected_locs):
+def show_dropdown(scope, n_clicks1, n_clicks2, value_type, selected_locs, selected_single_loc):
     if scope is None or value_type is None:
         raise PreventUpdate
     ctx = dash.callback_context
@@ -371,9 +372,12 @@ def show_dropdown(scope, n_clicks1, n_clicks2, value_type, selected_locs):
         persistence=scope
     )
 
+    if selected_single_loc is None or selected_single_loc not in locs:
+        selected_single_loc = locs[0]
     dropdown2 = dcc.Dropdown(
         id=ID_DROPDOWN_LOC2,
         options=options,
+        value=selected_single_loc,
         multi=False,
         persistence_type='session',
         persistence=scope
@@ -459,7 +463,10 @@ def map_callback(scope):
      Input(ID_DROPDOWN_LOC2, 'value')]
 )
 def single_loc_stat_callback(scope, location):
-    rows = []
+    df = dataproc.get_top_locations(scope, stat=STAT_CONFIRMED)
+    locs = list(df.index)
+    if location not in locs:
+        raise PreventUpdate
     stat = STAT_CONFIRMED
     value, diff, pct_change, per_capita, one_per_n = dataproc.get_latest_stat(stat, scope=scope, loc=location)
     diff_arrow = lambda diff: f'\u21e7' if diff > 0 else f'\u21e9'
@@ -467,14 +474,24 @@ def single_loc_stat_callback(scope, location):
     formatted_value = f'{value:,.0f} (1 in {one_per_n:,.0f})'
     formatted_diff = f'{diff:+,.0f} ({pct_change:+.2f}%) {arrow} past 24h'
     col1 = dbc.Col([
-        html.H2(f'{stat}', className='alert-heading'),
-        html.H2(f'{formatted_value}', className='alert-heading'),
+        html.H3(f'{stat}', className='alert-heading'),
+        html.H3(f'{formatted_value}', className='alert-heading'),
         html.H4(f'{formatted_diff}'),
     ])
-
-    rows.append(col1)
-    return rows
+    row1 = dbc.Alert(dbc.Row([col1]), color=stat_to_color_map.get(stat))
+    stat = STAT_DEATHS
+    value, diff, pct_change, per_capita, one_per_n = dataproc.get_latest_stat(stat, scope=scope, loc=location)
+    diff_arrow = lambda diff: f'\u21e7' if diff > 0 else f'\u21e9'
+    arrow = diff_arrow(diff)
+    formatted_value = f'{value:,.0f} (1 in {one_per_n:,.0f})'
+    formatted_diff = f'{diff:+,.0f} ({pct_change:+.2f}%) {arrow} past 24h'
+    col2 = dbc.Col([
+        html.H3(f'{stat}', className='alert-heading'),
+        html.H3(f'{formatted_value}', className='alert-heading'),
+        html.H4(f'{formatted_diff}'),
+    ])
+    row2 = dbc.Alert(dbc.Row([col2]), color=stat_to_color_map.get(stat))
+    return [row1, row2]
 
 if __name__ == '__main__':
     app.run_server(debug=False, port=8888)
-
