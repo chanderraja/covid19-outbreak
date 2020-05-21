@@ -65,6 +65,11 @@ stat_to_stat_header_col_id_map = make_reverse_lookup(stat_header_col_id_to_stat_
 
 dataproc = CovidDataProcessor()
 
+from dateutil.parser import parse
+import datetime
+
+dataproc.get_all_loc_stats(SCOPE_WORLD, STAT_CONFIRMED)
+
 stat_to_color_map = {
     STAT_CONFIRMED: 'warning',
     STAT_RECOVERED: 'success',

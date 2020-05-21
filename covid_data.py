@@ -26,11 +26,11 @@ STAT_RECOVERED='Recovered'
 STAT_ACTIVE='Active'
 
 # Stat value types
-VALUE_TYPE_CUMULATIVE=0
-VALUE_TYPE_DAILY_DIFF=1
-VALUE_TYPE_DAILY_PERCENT_CHANGE=2
-VALUE_TYPE_PER_CAPITA=3
-VALUE_TYPE_ONE_PER_N=4
+VALUE_TYPE_CUMULATIVE='cumulative'
+VALUE_TYPE_DAILY_DIFF='abs diff 24h'
+VALUE_TYPE_DAILY_PERCENT_CHANGE='percent diff'
+VALUE_TYPE_PER_CAPITA='per capita'
+VALUE_TYPE_ONE_PER_N='1 per N'
 
 # Data frame columns
 
@@ -97,7 +97,7 @@ def get_location_overall(scope):
     return 'Not implemented'
 
 def get_value_types():
-    return [VALUE_TYPE_CUMULATIVE, VALUE_TYPE_DAILY_DIFF, VALUE_TYPE_DAILY_PERCENT_CHANGE]
+    return [VALUE_TYPE_CUMULATIVE, VALUE_TYPE_DAILY_DIFF, VALUE_TYPE_DAILY_PERCENT_CHANGE, VALUE_TYPE_PER_CAPITA, VALUE_TYPE_ONE_PER_N]
 
 def compute_df_per_capita(df, df_population, location_column, population_column, multiplier=1000000.0):
     df_per_capita = df.copy()
@@ -640,3 +640,25 @@ class CovidDataProcessor:
         df1.set_index(add_location(df1), inplace=True)
         return df1
 
+    def get_latest_date(self, scope, stat):
+        df = self.get_stat_by_date_df(scope, stat, value_type=VALUE_TYPE_CUMULATIVE)
+        return df.index.max()
+
+    def get_earliest_date(self, scope, stat):
+        df = self.get_stat_by_date_df(scope, stat, value_type=VALUE_TYPE_CUMULATIVE)
+        return df.index.min()
+
+    def get_all_loc_stats(self, scope, stat, date=None):
+        if date is None:
+            date = self.get_latest_date(scope, stat)
+
+        series_to_concat = []
+        for vtype in get_value_types():
+            df = self.get_stat_by_date_df(scope, stat, value_type=vtype)
+            s = df.loc[date]
+            s = s.rename(vtype)
+            series_to_concat.append(s)
+
+        df1 = pd.concat(series_to_concat, axis=1, sort=False)
+        df1.reset_index(inplace=True)
+        return df1
