@@ -18,6 +18,63 @@ def get_stat_table(dataproc: CovidDataProcessor, scope, stat, table_id):
 
     table = dash_table.DataTable(
         id=table_id,
+        columns=[{
+            'id': 'index',
+            'name': 'Location',
+            'type': 'text'
+        }, {
+            'id': VALUE_TYPE_CUMULATIVE,
+            'name': 'Total',
+            'type': 'numeric',
+            'format': Format(
+                        precision=0,
+                        group=Group.yes,
+                        scheme=Scheme.fixed)
+        }, {
+            'id': VALUE_TYPE_DAILY_DIFF,
+            'name': 'Change',
+            'type': 'numeric',
+            'format': Format(precision=0,
+                        group=Group.yes,
+                        scheme=Scheme.fixed).sign(Sign.positive)
+        }, { 'id': VALUE_TYPE_DAILY_PERCENT_CHANGE,
+            'name': 'Change (%)',
+            'type': 'numeric',
+            'format': Format(scheme=Scheme.fixed, precision=2).sign(Sign.positive)
+        }, {
+            'id': VALUE_TYPE_PER_CAPITA,
+            'name': 'Per Capita',
+            'type': 'numeric',
+            'format': Format(precision=2,
+                        group=Group.yes,
+                        scheme=Scheme.fixed)
+        }, {
+            'id': VALUE_TYPE_ONE_PER_N,
+            'name': '1 Per N',
+            'type': 'numeric',
+            'format': Format(precision=0,
+                        group=Group.yes,
+                        scheme=Scheme.fixed)
+        }],
+        data=df.to_dict('records'),
+        style_cell={
+            'height': 'auto',
+            'width': '60px',
+            'minWidth': '60px',
+            'maxWidth': '60px',
+            'whiteSpace': 'normal',
+            'overflow': 'hidden',
+            'textOverflow': 'ellipsis',
+        },
+        sort_action='native',
+        style_table={
+            'height': 400,
+        },
+    )
+
+    '''
+        table = dash_table.DataTable(
+        id=table_id,
         #columns=[
         #   dict(name=i, id=i, deletable=False) for i in df.columns
         #],
@@ -63,8 +120,8 @@ def get_stat_table(dataproc: CovidDataProcessor, scope, stat, table_id):
         editable=False,
         #filter_action='native',
         sort_action='native',
-        #page_action='native',
-        #page_size=10,
+        page_action='native',
+        page_size=10,
         #page_action='none',
         #persistence=True,
         virtualization=True,
@@ -73,7 +130,7 @@ def get_stat_table(dataproc: CovidDataProcessor, scope, stat, table_id):
             'fontWeight': 'bold',
             'textAlign': 'center'
         },
-        style_cell_conditional=style_cell_conditional,
+        #style_cell_conditional=style_cell_conditional,
         style_cell={
             'height': 'auto',
             'width': '80px',
@@ -84,8 +141,9 @@ def get_stat_table(dataproc: CovidDataProcessor, scope, stat, table_id):
             'textOverflow': 'ellipsis',
         },
         style_table={
-            'overflowY': 'auto'
+        #    'overflowY': 'auto'
         },
         fixed_rows={'headers': True, 'data': 0}
     )
+    '''
     return table
