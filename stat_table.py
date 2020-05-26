@@ -1,6 +1,7 @@
 import dash_table
 import dash_table.FormatTemplate as FormatTemplate
 from dash_table.Format import Format, Scheme, Sign, Symbol, Group
+from dash.dependencies import Input, Output, State
 from covid_data import CovidDataProcessor
 from covid_data import VALUE_TYPE_ONE_PER_N, VALUE_TYPE_PER_CAPITA, VALUE_TYPE_DAILY_DIFF
 from covid_data import VALUE_TYPE_CUMULATIVE, VALUE_TYPE_DAILY_PERCENT_CHANGE
@@ -67,9 +68,10 @@ def get_stat_table(dataproc: CovidDataProcessor, scope, stat, table_id):
             'textOverflow': 'ellipsis',
         },
         sort_action='native',
-        style_table={
-            'height': 400,
-        },
+        row_selectable='single',
+        filter_action='native',
+        page_size=20,
+        selected_rows=[0]
     )
 
     '''
@@ -147,3 +149,19 @@ def get_stat_table(dataproc: CovidDataProcessor, scope, stat, table_id):
     )
     '''
     return table
+
+
+def stat_table_select_callback(selected_rows):
+    style = [{
+        'if': {'row_index': i},
+        'background_color': '#D2F3FF'
+    } for i in selected_rows]
+    return style
+
+
+
+def register_stat_table_select_callback(app, table_id):
+    outputs = Output(table_id, 'style_data_conditional')
+    inputs = [Input(table_id, 'selected_rows')]
+    app.callback(outputs, inputs)(stat_table_select_callback)
+

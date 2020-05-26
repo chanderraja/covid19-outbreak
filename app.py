@@ -73,7 +73,7 @@ def get_stat_table_ui():
                 ]
             ),
             dbc.CardBody(id=ID_STAT_TABLE_DIV)
-        ], className="w-100 mb-8",
+        ],
     )
 
 
@@ -100,6 +100,8 @@ app.layout = serve_layout()
 def stat_table_callback(scope, stat):
     return get_stat_table(dataproc, scope, stat, table_id=ID_STAT_TABLE)
 
+from stat_table import register_stat_table_select_callback
+register_stat_table_select_callback(app, ID_STAT_TABLE)
 
 if __name__ == '__main__':
     app.run_server(debug=False, port=8765)
