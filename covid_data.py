@@ -661,5 +661,7 @@ class CovidDataProcessor:
 
         df1 = pd.concat(series_to_concat, axis=1, sort=False)
         df1.reset_index(inplace=True)
+        df1['id'] = df1['index']
+        df1.set_index('id', inplace=True, drop=False)
         df1.sort_values(by=[VALUE_TYPE_CUMULATIVE], inplace=True, ascending=False)
         return df1

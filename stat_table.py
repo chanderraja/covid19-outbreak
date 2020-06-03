@@ -2,9 +2,11 @@ import dash_table
 import dash_table.FormatTemplate as FormatTemplate
 from dash_table.Format import Format, Scheme, Sign, Symbol, Group
 from dash.dependencies import Input, Output, State
+from dash.exceptions import PreventUpdate
 from covid_data import CovidDataProcessor
 from covid_data import VALUE_TYPE_ONE_PER_N, VALUE_TYPE_PER_CAPITA, VALUE_TYPE_DAILY_DIFF
 from covid_data import VALUE_TYPE_CUMULATIVE, VALUE_TYPE_DAILY_PERCENT_CHANGE
+import pandas as pd
 
 
 def get_stat_table(dataproc: CovidDataProcessor, scope, stat, table_id):
@@ -70,8 +72,10 @@ def get_stat_table(dataproc: CovidDataProcessor, scope, stat, table_id):
         sort_action='native',
         row_selectable='single',
         filter_action='native',
-        page_size=20,
-        selected_rows=[0]
+        selected_rows=[],
+        page_action='native',
+        page_current=0,
+        page_size = 20,
     )
 
     '''
@@ -151,17 +155,39 @@ def get_stat_table(dataproc: CovidDataProcessor, scope, stat, table_id):
     return table
 
 
-def stat_table_select_callback(selected_rows):
-    style = [{
-        'if': {'row_index': i},
-        'background_color': '#D2F3FF'
-    } for i in selected_rows]
+def stat_table_select_callback(virt_indices, virt_row_ids, virt_selected_rows, row_ids, selected_row_ids, selected_rows, active_cell):
+    print(f'virt_data={virt_indices}')
+    print(f'virt_rows_ids={virt_row_ids}')
+    print(f'virt_selected_rows={virt_selected_rows}')
+    print(f'rows_ids={row_ids}')
+    print(f'selected_row_ids={selected_row_ids}')
+    print(f'selected_rows={selected_rows}')
+    print(f'active_cell={active_cell}')
+    raise PreventUpdate
+    if virt_selected_rows is None or len(virt_selected_rows) == 0:
+        raise PreventUpdate
+    style = [
+        {
+            'if': { 'row_index':  selected_rows[0]},
+            'backgroundColor': 'blue',
+            'color': 'white'
+        }
+    ]
     return style
 
 
 
 def register_stat_table_select_callback(app, table_id):
     outputs = Output(table_id, 'style_data_conditional')
-    inputs = [Input(table_id, 'selected_rows')]
+    inputs = [
+        Input(table_id, 'derived_virtual_indices '),
+        Input(table_id, 'derived_virtual_row_ids'),
+        Input(table_id, 'derived_virtual_selected_rows'),
+        Input(table_id, 'row_ids'),
+        Input(table_id, 'selected_row_ids'),
+        Input(table_id, 'selected_rows'),
+        Input(table_id, 'active_cell')]
     app.callback(outputs, inputs)(stat_table_select_callback)
 
+def get_stat_table_selected_location_input(table_id):
+    return Input(table_id, 'selected_row_ids')
