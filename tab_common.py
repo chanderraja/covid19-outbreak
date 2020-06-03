@@ -23,13 +23,7 @@ def get_top_locations_bar_chart(df, stat, n=10, logger=None):
             autosize=True))
     return figure
 
-def get_time_series_scatter_chart(df, locations=None, value_type=VALUE_TYPE_CUMULATIVE, title=None, logger=None):
-    if df is None:
-        return dict(data=dict())
-    if value_type == VALUE_TYPE_DAILY_DIFF:
-        df = df.diff()
-    elif value_type == VALUE_TYPE_DAILY_PERCENT_CHANGE:
-        df = df.pct_change()
+def get_time_series_scatter_chart(df, locations=None, value_type=VALUE_TYPE_CUMULATIVE, title=None, height=600, width=600, logger=None):
     x_list = [d.date() for d in df.index]
     data = []
     if locations is not None and isinstance(locations, list):
@@ -42,7 +36,8 @@ def get_time_series_scatter_chart(df, locations=None, value_type=VALUE_TYPE_CUMU
                                name=loc))
     layout = go.Layout(
         title=title,
-        height=600,
+        height=height,
+        width=width,
         plot_bgcolor='rgba(240,240,255,100)',
         legend=dict(
             x=0.05,

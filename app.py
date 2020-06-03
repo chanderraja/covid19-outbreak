@@ -29,6 +29,7 @@ app.logger.addHandler(ch)
 ID_DROPDOWN_SCOPE='id-dropdown-scope'
 ID_STAT_TABLE_DIV='id-stat-table-div'
 ID_STAT_TABLE='id-stat-table'
+ID_STAT_CHARTS_DIV='id-stat-charts-div'
 ID_RADIOITEMS_STAT='id-radioitems-stat'
 
 dataproc = CovidDataProcessor()
@@ -76,6 +77,14 @@ def get_stat_table_ui():
         ],
     )
 
+def get_stat_charts_ui():
+    return dbc.Card(
+        [
+            dbc.CardBody(id=ID_STAT_CHARTS_DIV)
+        ],
+    )
+
+
 
 def serve_layout():
     layout = dbc.Container(
@@ -83,7 +92,9 @@ def serve_layout():
             dashboard,
             html.Hr(),
             dbc.Row([
-                dbc.Col(get_stat_table_ui(), lg=6)
+                dbc.Col(get_stat_table_ui(), lg=6),
+                dbc.Col(get_stat_charts_ui(), lg=6)
+
             ]),
        ], fluid=True,
     )
@@ -91,6 +102,11 @@ def serve_layout():
 
 
 app.layout = serve_layout()
+
+
+from stat_table import register_stat_table_select_callback, get_stat_table_selected_location_input
+from tab_common import get_time_series_scatter_chart
+from covid_data import get_value_types
 
 @app.callback(
     Output(ID_STAT_TABLE_DIV, 'children'),
@@ -100,8 +116,20 @@ app.layout = serve_layout()
 def stat_table_callback(scope, stat):
     return get_stat_table(dataproc, scope, stat, table_id=ID_STAT_TABLE)
 
-from stat_table import register_stat_table_select_callback
-register_stat_table_select_callback(app, ID_STAT_TABLE)
+#register_stat_table_select_callback(app, ID_STAT_TABLE)
+
+@app.callback(
+    Output(ID_STAT_CHARTS_DIV, 'children'),
+    [Input(ID_DROPDOWN_SCOPE, 'value'),
+     Input(ID_RADIOITEMS_STAT, 'value'),
+     get_stat_table_selected_location_input(table_id=ID_STAT_TABLE)]
+)
+def stat_charts_callback(scope, stat, locations):
+    figures = [get_time_series_scatter_chart(dataproc.get_stat_by_date_df(scope, stat, value_type=v),
+                                             locations, title=v, height=500, width=600)
+                for v in get_value_types()]
+    charts = [dcc.Graph(figure=f) for f in figures]
+    return charts
 
 if __name__ == '__main__':
     app.run_server(debug=False, port=8765)
