@@ -69,15 +69,16 @@ def get_stat_table(dataproc: CovidDataProcessor, scope, stat, table_id):
             'overflow': 'hidden',
             'textOverflow': 'ellipsis',
         },
+        selected_row_ids=[],
         sort_action='native',
         row_selectable='multi',
         filter_action='native',
-        selected_rows=[0],
         page_action='native',
         page_current=0,
         page_size = 20,
         persistence_type='local',
-        persistence=True
+        persistence=scope + ' ' + stat,
+        persisted_props=['selected_rows', 'selected_row_ids']
     )
     return table
 
@@ -91,17 +92,6 @@ def stat_table_select_callback(virt_indices, virt_row_ids, virt_selected_rows, r
     print(f'selected_rows={selected_rows}')
     print(f'active_cell={active_cell}')
     raise PreventUpdate
-    if virt_selected_rows is None or len(virt_selected_rows) == 0:
-        raise PreventUpdate
-    style = [
-        {
-            'if': { 'row_index':  selected_rows[0]},
-            'backgroundColor': 'blue',
-            'color': 'white'
-        }
-    ]
-    return style
-
 
 
 def register_stat_table_select_callback(app, table_id):

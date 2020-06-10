@@ -4,6 +4,7 @@ from dash.dependencies import Input, Output, State
 import dash_html_components as html
 import dash_core_components as dcc
 import dash_bootstrap_components as dbc
+import dash_table
 from dash.exceptions import PreventUpdate
 from covid_data import CovidDataProcessor, SCOPE_WORLD, SCOPE_USA, SCOPE_US_COUNTIES
 from covid_data import get_scope_types, get_location_overall
@@ -73,7 +74,10 @@ def get_stat_table_ui():
                     ])
                 ]
             ),
-            dbc.CardBody(id=ID_STAT_TABLE_DIV)
+            dbc.CardBody(id=ID_STAT_TABLE_DIV,
+                         children = [
+                             dash_table.DataTable(id=ID_STAT_TABLE)
+                         ])
         ],
     )
 
@@ -111,8 +115,7 @@ from covid_data import get_value_types
 @app.callback(
     Output(ID_STAT_TABLE_DIV, 'children'),
     [Input(ID_DROPDOWN_SCOPE, 'value'),
-     Input(ID_RADIOITEMS_STAT, 'value')]
-)
+     Input(ID_RADIOITEMS_STAT, 'value')])
 def stat_table_callback(scope, stat):
     return get_stat_table(dataproc, scope, stat, table_id=ID_STAT_TABLE)
 
@@ -125,11 +128,13 @@ def stat_table_callback(scope, stat):
      get_stat_table_selected_location_input(table_id=ID_STAT_TABLE)]
 )
 def stat_charts_callback(scope, stat, locations):
+    app.logger.warning(f'scope={scope} stat={stat} locations={locations}')
     figures = [get_time_series_scatter_chart(dataproc.get_stat_by_date_df(scope, stat, value_type=v),
-                                             locations, title=v, height=500, width=600)
+                                             locations, title=v, height=500)
                 for v in get_value_types()]
     charts = [dcc.Graph(figure=f) for f in figures]
     return charts
+
 
 if __name__ == '__main__':
     app.run_server(debug=False, port=8765)

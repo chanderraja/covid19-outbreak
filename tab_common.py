@@ -23,7 +23,7 @@ def get_top_locations_bar_chart(df, stat, n=10, logger=None):
             autosize=True))
     return figure
 
-def get_time_series_scatter_chart(df, locations=None, value_type=VALUE_TYPE_CUMULATIVE, title=None, height=600, width=600, logger=None):
+def get_time_series_scatter_chart(df, locations=None, value_type=VALUE_TYPE_CUMULATIVE, title=None, height=None, width=None, logger=None):
     x_list = [d.date() for d in df.index]
     data = []
     if locations is not None and isinstance(locations, list):
