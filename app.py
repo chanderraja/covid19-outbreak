@@ -32,6 +32,7 @@ ID_STAT_TABLE_DIV='id-stat-table-div'
 ID_STAT_TABLE='id-stat-table'
 ID_STAT_CHARTS_DIV='id-stat-charts-div'
 ID_RADIOITEMS_STAT='id-radioitems-stat'
+ID_DIV_TABLE_SELECTION_STORE='id-dic-table-selection-store'
 
 dataproc = CovidDataProcessor()
 
@@ -100,6 +101,9 @@ def serve_layout():
                 dbc.Col(get_stat_charts_ui(), lg=6)
 
             ]),
+            # Hidden div that stores table selections
+            html.Div(id=ID_DIV_TABLE_SELECTION_STORE, style={'display': 'none'})
+
        ], fluid=True,
     )
     return layout
@@ -111,29 +115,41 @@ app.layout = serve_layout()
 from stat_table import register_stat_table_select_callback, get_stat_table_selected_location_input
 from tab_common import get_time_series_scatter_chart
 from covid_data import get_value_types
+import json
 
 @app.callback(
     Output(ID_STAT_TABLE_DIV, 'children'),
     [Input(ID_DROPDOWN_SCOPE, 'value'),
-     Input(ID_RADIOITEMS_STAT, 'value')])
-def stat_table_callback(scope, stat):
-    return get_stat_table(dataproc, scope, stat, table_id=ID_STAT_TABLE)
+     Input(ID_RADIOITEMS_STAT, 'value')],
+    [State(ID_DIV_TABLE_SELECTION_STORE, 'children')])
+def stat_table_callback(scope, stat, saved_locations_json):
+    selected_locs = []
+    if saved_locations_json is not None:
+        saved_locs_dict = json.loads(saved_locations_json)
+        if scope in saved_locs_dict:
+            selected_locs = saved_locs_dict.get(scope)
+    return get_stat_table(dataproc, scope, stat, table_id=ID_STAT_TABLE, selected_locs=selected_locs)
 
 #register_stat_table_select_callback(app, ID_STAT_TABLE)
 
 @app.callback(
-    Output(ID_STAT_CHARTS_DIV, 'children'),
+    [Output(ID_STAT_CHARTS_DIV, 'children'),
+     Output(ID_DIV_TABLE_SELECTION_STORE, 'children')],
     [Input(ID_DROPDOWN_SCOPE, 'value'),
      Input(ID_RADIOITEMS_STAT, 'value'),
-     get_stat_table_selected_location_input(table_id=ID_STAT_TABLE)]
+     get_stat_table_selected_location_input(table_id=ID_STAT_TABLE)],
+    [State(ID_DIV_TABLE_SELECTION_STORE, 'children')]
 )
-def stat_charts_callback(scope, stat, locations):
+def stat_charts_callback(scope, stat, locations, saved_locations_json):
     app.logger.warning(f'scope={scope} stat={stat} locations={locations}')
     figures = [get_time_series_scatter_chart(dataproc.get_stat_by_date_df(scope, stat, value_type=v),
                                              locations, title=v, height=500)
                 for v in get_value_types()]
     charts = [dcc.Graph(figure=f) for f in figures]
-    return charts
+    saved_locs_dict = json.loads(saved_locations_json) if saved_locations_json is not None else dict()
+    saved_locs_dict[scope] = locations
+    saved_locations_json = json.dumps(saved_locs_dict)
+    return [charts, saved_locations_json]
 
 
 if __name__ == '__main__':

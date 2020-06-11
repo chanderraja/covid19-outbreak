@@ -9,7 +9,7 @@ from covid_data import VALUE_TYPE_CUMULATIVE, VALUE_TYPE_DAILY_PERCENT_CHANGE
 import pandas as pd
 
 
-def get_stat_table(dataproc: CovidDataProcessor, scope, stat, table_id):
+def get_stat_table(dataproc: CovidDataProcessor, scope, stat, table_id, selected_locs=[]):
     # get stats for all locations under scope for latest date
     df = dataproc.get_all_loc_stats(scope=scope, stat=stat)
     style_cell_conditional = [
@@ -69,16 +69,16 @@ def get_stat_table(dataproc: CovidDataProcessor, scope, stat, table_id):
             'overflow': 'hidden',
             'textOverflow': 'ellipsis',
         },
-        selected_row_ids=[],
+        selected_row_ids=selected_locs,
         sort_action='native',
         row_selectable='multi',
         filter_action='native',
         page_action='native',
         page_current=0,
         page_size = 20,
-        persistence_type='local',
-        persistence=scope + ' ' + stat,
-        persisted_props=['selected_rows', 'selected_row_ids']
+        #persistence_type='local',
+        #persistence=scope + ' ' + stat,
+        #persisted_props=['selected_rows', 'selected_row_ids']
     )
     return table
 
