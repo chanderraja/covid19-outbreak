@@ -19,6 +19,9 @@ def get_stat_table(dataproc: CovidDataProcessor, scope, stat, table_id, selected
         } for c in df.columns
     ]
 
+    selected_rows = [df.index.get_loc(y) for y in selected_locs]
+    print (f'selected_rows = {selected_rows}')
+
     table = dash_table.DataTable(
         id=table_id,
         columns=[{
@@ -70,6 +73,7 @@ def get_stat_table(dataproc: CovidDataProcessor, scope, stat, table_id, selected
             'textOverflow': 'ellipsis',
         },
         selected_row_ids=selected_locs,
+        selected_rows=selected_rows,
         sort_action='native',
         row_selectable='multi',
         filter_action='native',
