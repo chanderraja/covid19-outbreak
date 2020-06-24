@@ -384,34 +384,6 @@ class CovidDataProcessor:
         self.scope_to_totals_map[SCOPE_US_COUNTIES] = self.usa_totals
 
 
-    def __get_csse_time_series_data(self, url, set_index=None, sum_index='Total',
-                                    drop_columns=None,
-                                    aggregate_column=None,
-                                    logtext=None,
-                                    rename_locations=None):
-        if logtext is not None:
-            self.logger.info(f'Reading {logtext} data from {url}...')
-        df = pd.read_csv(url)
-
-        if set_index is not None:
-            df.set_index(keys=set_index, inplace=True)
-        if drop_columns is not None:
-            self.logger.info(f'Dropping unwanted columns...')
-            df.drop(columns=drop_columns, inplace=True, errors='ignore')
-        if aggregate_column is not None:
-            df = df.groupby(df[aggregate_column]).aggregate('sum')
-        if rename_locations is not None:
-            df.rename(index=rename_locations, inplace=True)
-            df.sort_index(inplace=True)
-        sum = df.aggregate('sum')
-        df_sum = pd.DataFrame([sum], index=[sum_index])
-        df_sum = df_sum.transpose()
-        df_sum.index = pd.to_datetime(df_sum.index)
-        #df = pd.concat([df_sum, df], sort=False)
-        df1_transposed = df.transpose()
-        df1_transposed.index = pd.to_datetime(df1_transposed.index)
-        return df1_transposed, df_sum
-
     def compute_df_for_value_types(self, df, df_pop=None, loc_column=None, pop_column=None, multiplier=None):
         """
         Compute data frames for all supported value types from a time series dataframe and return as a dict indexed by
@@ -510,9 +482,6 @@ class CovidDataProcessor:
                                                     multiplier=per_capita_multiplier)
         pass
 
-    def __read_csse_time_series_reports(self):
-        self.__read_time_series_data()
-
     def __check_name_lists(self, list1, list1_name, list2, list2_name):
         print(f'Comparing {list1_name} with {list2_name}')
         intersection = sorted(list(set(list1) & set(list2)))
@@ -529,7 +498,6 @@ class CovidDataProcessor:
         self.__read_us_counties_geojson()
         self.__read_csse_daily_report()
         self.__read_time_series_data()
-        self.__read_csse_time_series_reports()
         #self.__check_name_lists(list(self.population_data_lookup[SCOPE_WORLD]['name']), 'pop_world', list(self.df_confirmed_by_date_world.columns), 'df_world')
         #self.__check_name_lists(list(self.population_data_lookup[SCOPE_WORLD]['state']), 'pop_us_states', list(self.df_confirmed_by_date_usa.columns), 'df_us_states')
         #self.__check_name_lists(list(self.population_data_lookup[SCOPE_WORLD]['Combined_Key']), 'pop_us_counties', list(self.df_confirmed_by_date_us_counties.columns), 'df_us_counties')
