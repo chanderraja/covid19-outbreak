@@ -9,6 +9,7 @@ from dash.exceptions import PreventUpdate
 from covid_data import CovidDataProcessor, SCOPE_WORLD, SCOPE_USA, SCOPE_US_COUNTIES
 from covid_data import get_scope_types, get_location_overall
 from covid_data import STAT_CONFIRMED, STAT_DEATHS, STAT_RECOVERED, STAT_ACTIVE
+from covid_data import VALUE_TYPE_CUMULATIVE
 from stat_table import get_stat_table
 
 supported_stats = [STAT_CONFIRMED, STAT_DEATHS]
@@ -75,19 +76,25 @@ def get_stat_table_ui():
                     ])
                 ]
             ),
-            dbc.CardBody(id=ID_STAT_TABLE_DIV,
-                         children = [
-                             dash_table.DataTable(id=ID_STAT_TABLE)
-                         ])
+            dbc.CardBody([
+                dbc.Row([
+                    dbc.Col(id=ID_STAT_TABLE_DIV, lg=4, md=4, sm=12),
+                    dbc.Col(id=ID_STAT_CHARTS_DIV, lg=8, md=8, sm=12)
+                ])
+            ])
+            # dbc.CardBody(id=ID_STAT_TABLE_DIV,
+            #             children = [
+            #                 dash_table.DataTable(id=ID_STAT_TABLE)
+            #             ])
         ],
     )
 
-def get_stat_charts_ui():
-    return dbc.Card(
-        [
-            dbc.CardBody(id=ID_STAT_CHARTS_DIV)
-        ],
-    )
+# def get_stat_charts_ui():
+#     return dbc.Card(
+#         [
+#             dbc.CardBody(id=ID_STAT_CHARTS_DIV)
+#         ],
+#     )
 
 
 
@@ -97,8 +104,8 @@ def serve_layout():
             dashboard,
             html.Hr(),
             dbc.Row([
-                dbc.Col(get_stat_table_ui(), lg=6),
-                dbc.Col(get_stat_charts_ui(), lg=6)
+                dbc.Col(get_stat_table_ui(), lg=12),
+                # dbc.Col(get_stat_charts_ui(), lg=6)
 
             ]),
             # Hidden div that stores table selections
@@ -144,7 +151,7 @@ def stat_charts_callback(scope, stat, locations, saved_locations_json):
     app.logger.warning(f'scope={scope} stat={stat} locations={locations}')
     figures = [get_time_series_scatter_chart(dataproc.get_stat_by_date_df(scope, stat, value_type=v),
                                              locations, title=v, height=500)
-                for v in get_value_types()]
+                for v in [VALUE_TYPE_CUMULATIVE]] #get_value_types()]
     charts = [dcc.Graph(figure=f) for f in figures]
     saved_locs_dict = json.loads(saved_locations_json) if saved_locations_json is not None else dict()
     saved_locs_dict[scope] = locations
